@@ -5,7 +5,7 @@ Inference strategies:
 1. File-based: If spec says "files: [src/auth.py]" and file exists → implemented
 2. Pattern-based: Match resource names to file/function patterns
 3. Test-based: If tests exist and pass → implemented
-4. AST-based: Deep analysis of code structure (future: tree-sitter)
+4. AST-based: Deep analysis via tree-sitter (with stdlib ast/regex fallback)
 
 The goal: Run `terra4mice refresh` and automatically update state
 based on what actually exists in the codebase.
@@ -20,6 +20,11 @@ from typing import List, Dict, Optional, Tuple
 from dataclasses import dataclass, field
 
 from .models import Spec, State, Resource, ResourceStatus
+
+try:
+    from . import analyzers as ts_analyzers
+except ImportError:
+    ts_analyzers = None
 
 
 @dataclass
@@ -219,9 +224,13 @@ class InferenceEngine:
         generic_patterns = [
             f"**/*{resource.name}*.py",
             f"**/*{resource.name}*.ts",
+            f"**/*{resource.name}*.tsx",
             f"**/*{resource.name}*.js",
+            f"**/*{resource.name}*.jsx",
             f"**/*{resource.name}*.sol",
             f"**/{resource.name}/**/*.py",
+            f"**/{resource.name}/**/*.ts",
+            f"**/{resource.name}/**/*.tsx",
         ]
         patterns.extend(generic_patterns)
 
@@ -271,10 +280,19 @@ class InferenceEngine:
     def _analyze_ast(self, resource: Resource, files: List[str]) -> float:
         """
         Analyze files to determine implementation completeness.
-        Supports Python (via AST) and Solidity (via content analysis).
+
+        Uses tree-sitter when available for deep analysis, with fallbacks:
+        1. tree-sitter (Python, TS, JS, Solidity) -> score_against_spec
+        2. stdlib ast (Python only)
+        3. regex (Solidity)
+        4. regex (TypeScript/JavaScript)
+        5. size heuristic (config/docs)
 
         Returns confidence score 0.0 to 1.0
         """
+        use_tree_sitter = (
+            ts_analyzers is not None and ts_analyzers.is_available()
+        )
         total_score = 0.0
         analyzed = 0
 
@@ -282,6 +300,28 @@ class InferenceEngine:
             full_path = self.config.root_dir / file_path
             if not full_path.exists():
                 continue
+
+            # Try tree-sitter first for supported extensions
+            if use_tree_sitter and file_path.endswith(
+                ('.py', '.ts', '.tsx', '.js', '.jsx', '.sol')
+            ):
+                try:
+                    with open(full_path, 'rb') as f:
+                        source_bytes = f.read()
+                    ts_result = ts_analyzers.analyze_file(file_path, source_bytes)
+                    if ts_result is not None:
+                        spec_score = ts_analyzers.score_against_spec(
+                            ts_result, resource.attributes
+                        )
+                        # Base score from presence of any names
+                        base_score = min(0.3, len(ts_result.all_names) * 0.05)
+                        score = max(spec_score, base_score)
+                        total_score += score
+                        analyzed += 1
+                        continue
+                except (IOError, UnicodeDecodeError):
+                    pass
+                # Fall through to legacy analysis if tree-sitter failed
 
             if file_path.endswith('.py'):
                 try:
@@ -298,6 +338,15 @@ class InferenceEngine:
                     with open(full_path, 'r', encoding='utf-8') as f:
                         source = f.read()
                     score = self._score_solidity(source, resource)
+                    total_score += score
+                    analyzed += 1
+                except (UnicodeDecodeError, IOError):
+                    continue
+            elif file_path.endswith(('.ts', '.tsx', '.js', '.jsx')):
+                try:
+                    with open(full_path, 'r', encoding='utf-8') as f:
+                        source = f.read()
+                    score = self._score_typescript_fallback(source, resource)
                     total_score += score
                     analyzed += 1
                 except (UnicodeDecodeError, IOError):
@@ -471,6 +520,51 @@ class InferenceEngine:
             # For non-sol docs, just being non-empty is good
             if loc > 20:
                 score += 0.3
+
+        return min(score, 1.0)
+
+    def _score_typescript_fallback(self, source: str, resource: Resource) -> float:
+        """
+        Regex-based analysis for TypeScript/JavaScript when tree-sitter is not available.
+
+        Detects function, class, interface, type, enum declarations and exports.
+        """
+        score = 0.0
+        source_lower = source.lower()
+        resource_name_lower = resource.name.lower().replace('_', '')
+
+        # Find declarations
+        declarations = re.findall(
+            r'\b(?:function|class|interface|type|enum)\s+(\w+)', source
+        )
+        if declarations:
+            score += 0.2
+            for decl in declarations:
+                decl_lower = decl.lower().replace('_', '')
+                if resource_name_lower in decl_lower or decl_lower in resource_name_lower:
+                    score += 0.2
+                    break
+
+        # Check exports
+        exports = re.findall(r'\bexport\s+(?:default\s+)?(?:function|class|const|let|var|interface|type|enum)\s+(\w+)', source)
+        if exports:
+            score += 0.1
+
+        # Check attributes.functions
+        spec_functions = resource.attributes.get("functions")
+        if spec_functions and isinstance(spec_functions, list):
+            found = 0
+            for fn in spec_functions:
+                if fn.lower() in source_lower:
+                    found += 1
+            if spec_functions:
+                score += 0.3 * (found / len(spec_functions))
+
+        # Check attributes.class
+        spec_class = resource.attributes.get("class")
+        if spec_class and isinstance(spec_class, str):
+            if spec_class.lower() in source_lower:
+                score += 0.2
 
         return min(score, 1.0)
 
