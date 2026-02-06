@@ -134,6 +134,12 @@ module:
 - **Phase 5** (Apply Runner) - PLANNED
 - **Phase 6** (Ecosystem Rollout) - PLANNED
 
+## Development Workflow
+
+- **Granular commits**: commit after each fix/feature, not in bulk. Each logical change gets its own commit with a descriptive message.
+- **Dogfood after changes**: run `terra4mice refresh --force` after modifying inference/analyzers to verify the tool works on itself.
+- **Tests before commit**: run `pytest tests/ -p no:pytest_ethereum` to verify no regressions.
+
 ## Self-Dogfooding
 
-This project tracks itself with terra4mice. The root `terra4mice.spec.yaml` and `terra4mice.state.json` define and track the project's own modules, examples, and docs. Current convergence: 86.1% (Phase 3 features account for the gap).
+This project tracks itself with terra4mice. The root `terra4mice.spec.yaml` and `terra4mice.state.json` define and track the project's own modules, examples, and docs.
