@@ -278,17 +278,20 @@ class InferenceEngine:
         # Get patterns for this resource type
         patterns = list(self.config.file_patterns.get(resource.type, []))
 
-        # Also try generic patterns
+        # Generic patterns: prefer exact name matches and boundary-aware patterns
+        # (e.g., "health" matches "health.py" and "health_check.py" but not "mental_health.py")
+        name = resource.name
         generic_patterns = [
-            f"**/*{resource.name}*.py",
-            f"**/*{resource.name}*.ts",
-            f"**/*{resource.name}*.tsx",
-            f"**/*{resource.name}*.js",
-            f"**/*{resource.name}*.jsx",
-            f"**/*{resource.name}*.sol",
-            f"**/{resource.name}/**/*.py",
-            f"**/{resource.name}/**/*.ts",
-            f"**/{resource.name}/**/*.tsx",
+            # Exact filename match
+            f"**/{name}.py", f"**/{name}.ts", f"**/{name}.tsx",
+            f"**/{name}.js", f"**/{name}.jsx", f"**/{name}.sol",
+            # Name as prefix (name_*.ext)
+            f"**/{name}_*.py", f"**/{name}_*.ts", f"**/{name}_*.tsx",
+            f"**/{name}_*.js", f"**/{name}_*.jsx", f"**/{name}_*.sol",
+            # Directory named after resource
+            f"**/{name}/**/*.py", f"**/{name}/**/*.ts", f"**/{name}/**/*.tsx",
+            # index file inside resource directory
+            f"**/{name}/index.ts", f"**/{name}/index.tsx", f"**/{name}/index.js",
         ]
         patterns.extend(generic_patterns)
 
