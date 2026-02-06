@@ -40,6 +40,25 @@ def is_available() -> bool:
 
 
 @dataclass
+class SymbolInfo:
+    """Metadata for a single symbol (function, class, method) found in source."""
+
+    name: str
+    kind: str  # "function", "class", "method", "interface", "type", "enum"
+    line_start: int
+    line_end: int
+    parent: str = ""  # "ClassName" for methods, empty for top-level
+    file: str = ""
+
+    @property
+    def qualified_name(self) -> str:
+        """Class.method or just function_name."""
+        if self.parent:
+            return f"{self.parent}.{self.name}"
+        return self.name
+
+
+@dataclass
 class AnalysisResult:
     """Result of analyzing a source file with tree-sitter."""
 
@@ -50,6 +69,7 @@ class AnalysisResult:
     entities: Set[str] = field(default_factory=set)
     decorators: Set[str] = field(default_factory=set)
     has_errors: bool = False
+    symbols: List[SymbolInfo] = field(default_factory=list)
 
     @property
     def all_names(self) -> Set[str]:
@@ -103,6 +123,44 @@ def _extract_names(captures: Dict[str, list], name_key: str) -> Set[str]:
     return names
 
 
+def _extract_symbols(
+    captures: Dict[str, list], name_key: str, kind: str, file: str = ""
+) -> List[SymbolInfo]:
+    """Extract SymbolInfo with line numbers from captured nodes."""
+    symbols = []
+    for node in captures.get(name_key, []):
+        text = node.text
+        if isinstance(text, bytes):
+            text = text.decode("utf-8", errors="replace")
+        # Use the parent node (e.g. function_definition) for line range
+        def_node = node.parent
+        if def_node:
+            line_start = def_node.start_point[0] + 1
+            line_end = def_node.end_point[0] + 1
+        else:
+            line_start = node.start_point[0] + 1
+            line_end = line_start
+        symbols.append(SymbolInfo(
+            name=text, kind=kind,
+            line_start=line_start, line_end=line_end,
+            file=file,
+        ))
+    return symbols
+
+
+def _assign_parents(
+    functions: List[SymbolInfo], classes: List[SymbolInfo]
+) -> List[SymbolInfo]:
+    """Assign parent class to methods based on line ranges."""
+    for func in functions:
+        for cls in classes:
+            if cls.line_start <= func.line_start <= cls.line_end:
+                func.parent = cls.name
+                func.kind = "method"
+                break
+    return functions
+
+
 # ---------------------------------------------------------------------------
 # Python analysis
 # ---------------------------------------------------------------------------
@@ -115,7 +173,7 @@ _PYTHON_IMPORT_QUERY = """[
 _PYTHON_DECORATOR_QUERY = "(decorator (identifier) @name)"
 
 
-def analyze_python(source: bytes) -> AnalysisResult:
+def analyze_python(source: bytes, file_path: str = "") -> AnalysisResult:
     """Analyze Python source code with tree-sitter."""
     if not _TREE_SITTER_AVAILABLE:
         return AnalysisResult()
@@ -128,9 +186,18 @@ def analyze_python(source: bytes) -> AnalysisResult:
     result = AnalysisResult()
     result.has_errors = tree.root_node.has_error
 
-    result.functions = _extract_names(_safe_query(language, _PYTHON_FUNC_QUERY, root), "name")
-    result.classes = _extract_names(_safe_query(language, _PYTHON_CLASS_QUERY, root), "name")
+    func_captures = _safe_query(language, _PYTHON_FUNC_QUERY, root)
+    class_captures = _safe_query(language, _PYTHON_CLASS_QUERY, root)
+
+    result.functions = _extract_names(func_captures, "name")
+    result.classes = _extract_names(class_captures, "name")
     result.entities = set(result.classes)
+
+    # Symbol extraction with line numbers
+    func_symbols = _extract_symbols(func_captures, "name", "function", file=file_path)
+    class_symbols = _extract_symbols(class_captures, "name", "class", file=file_path)
+    _assign_parents(func_symbols, class_symbols)
+    result.symbols = class_symbols + func_symbols
 
     # imports - try to get individual imported names
     import_captures = _safe_query(language, _PYTHON_IMPORT_QUERY, root)
@@ -199,7 +266,9 @@ _TS_IMPORT_QUERY = """(import_statement
       (import_specifier name: (identifier) @name))))"""
 
 
-def analyze_typescript(source: bytes, is_tsx: bool = False) -> AnalysisResult:
+def analyze_typescript(
+    source: bytes, is_tsx: bool = False, file_path: str = ""
+) -> AnalysisResult:
     """Analyze TypeScript/TSX source code with tree-sitter."""
     if not _TREE_SITTER_AVAILABLE:
         return AnalysisResult()
@@ -213,18 +282,24 @@ def analyze_typescript(source: bytes, is_tsx: bool = False) -> AnalysisResult:
     result = AnalysisResult()
     result.has_errors = tree.root_node.has_error
 
-    result.functions = _extract_names(_safe_query(language, _TS_FUNC_QUERY, root), "name")
+    func_captures = _safe_query(language, _TS_FUNC_QUERY, root)
+    result.functions = _extract_names(func_captures, "name")
 
     # Arrow functions
-    arrow_names = _extract_names(_safe_query(language, _TS_ARROW_QUERY, root), "name")
+    arrow_captures = _safe_query(language, _TS_ARROW_QUERY, root)
+    arrow_names = _extract_names(arrow_captures, "name")
     result.functions |= arrow_names
 
-    result.classes = _extract_names(_safe_query(language, _TS_CLASS_QUERY, root), "name")
+    class_captures = _safe_query(language, _TS_CLASS_QUERY, root)
+    result.classes = _extract_names(class_captures, "name")
 
     # Interfaces, type aliases, enums -> entities
-    interfaces = _extract_names(_safe_query(language, _TS_INTERFACE_QUERY, root), "name")
-    type_aliases = _extract_names(_safe_query(language, _TS_TYPE_ALIAS_QUERY, root), "name")
-    enums = _extract_names(_safe_query(language, _TS_ENUM_QUERY, root), "name")
+    iface_captures = _safe_query(language, _TS_INTERFACE_QUERY, root)
+    type_captures = _safe_query(language, _TS_TYPE_ALIAS_QUERY, root)
+    enum_captures = _safe_query(language, _TS_ENUM_QUERY, root)
+    interfaces = _extract_names(iface_captures, "name")
+    type_aliases = _extract_names(type_captures, "name")
+    enums = _extract_names(enum_captures, "name")
     result.entities = result.classes | interfaces | type_aliases | enums
 
     # Exports
@@ -232,6 +307,16 @@ def analyze_typescript(source: bytes, is_tsx: bool = False) -> AnalysisResult:
 
     # Imports
     result.imports = _extract_names(_safe_query(language, _TS_IMPORT_QUERY, root), "name")
+
+    # Symbol extraction with line numbers
+    func_symbols = _extract_symbols(func_captures, "name", "function", file=file_path)
+    func_symbols += _extract_symbols(arrow_captures, "name", "function", file=file_path)
+    class_symbols = _extract_symbols(class_captures, "name", "class", file=file_path)
+    iface_symbols = _extract_symbols(iface_captures, "name", "interface", file=file_path)
+    type_symbols = _extract_symbols(type_captures, "name", "type", file=file_path)
+    enum_symbols = _extract_symbols(enum_captures, "name", "enum", file=file_path)
+    _assign_parents(func_symbols, class_symbols)
+    result.symbols = class_symbols + iface_symbols + type_symbols + enum_symbols + func_symbols
 
     return result
 
@@ -267,7 +352,7 @@ _JS_IMPORT_QUERY = """(import_statement
       (import_specifier name: (identifier) @name))))"""
 
 
-def analyze_javascript(source: bytes) -> AnalysisResult:
+def analyze_javascript(source: bytes, file_path: str = "") -> AnalysisResult:
     """Analyze JavaScript source code with tree-sitter."""
     if not _TREE_SITTER_AVAILABLE:
         return AnalysisResult()
@@ -280,15 +365,25 @@ def analyze_javascript(source: bytes) -> AnalysisResult:
     result = AnalysisResult()
     result.has_errors = tree.root_node.has_error
 
-    result.functions = _extract_names(_safe_query(language, _JS_FUNC_QUERY, root), "name")
-    arrow_names = _extract_names(_safe_query(language, _JS_ARROW_QUERY, root), "name")
+    func_captures = _safe_query(language, _JS_FUNC_QUERY, root)
+    result.functions = _extract_names(func_captures, "name")
+    arrow_captures = _safe_query(language, _JS_ARROW_QUERY, root)
+    arrow_names = _extract_names(arrow_captures, "name")
     result.functions |= arrow_names
 
-    result.classes = _extract_names(_safe_query(language, _JS_CLASS_QUERY, root), "name")
+    class_captures = _safe_query(language, _JS_CLASS_QUERY, root)
+    result.classes = _extract_names(class_captures, "name")
     result.entities = set(result.classes)
 
     result.exports = _extract_names(_safe_query(language, _JS_EXPORT_QUERY, root), "name")
     result.imports = _extract_names(_safe_query(language, _JS_IMPORT_QUERY, root), "name")
+
+    # Symbol extraction with line numbers
+    func_symbols = _extract_symbols(func_captures, "name", "function", file=file_path)
+    func_symbols += _extract_symbols(arrow_captures, "name", "function", file=file_path)
+    class_symbols = _extract_symbols(class_captures, "name", "class", file=file_path)
+    _assign_parents(func_symbols, class_symbols)
+    result.symbols = class_symbols + func_symbols
 
     return result
 
@@ -313,7 +408,7 @@ _SOL_STRUCT_QUERY = "(struct_declaration name: (identifier) @name)"
 _SOL_ENUM_QUERY = "(enum_declaration name: (identifier) @name)"
 
 
-def analyze_solidity(source: bytes) -> AnalysisResult:
+def analyze_solidity(source: bytes, file_path: str = "") -> AnalysisResult:
     """Analyze Solidity source code with tree-sitter."""
     if not _TREE_SITTER_AVAILABLE:
         return AnalysisResult()
@@ -332,11 +427,13 @@ def analyze_solidity(source: bytes) -> AnalysisResult:
     result.has_errors = tree.root_node.has_error
 
     # Contracts, interfaces, libraries
-    contracts = _extract_names(_safe_query(language, _SOL_CONTRACT_QUERY, root), "name")
+    contract_captures = _safe_query(language, _SOL_CONTRACT_QUERY, root)
+    contracts = _extract_names(contract_captures, "name")
     result.classes = contracts
     result.entities = set(contracts)
 
-    result.functions = _extract_names(_safe_query(language, _SOL_FUNC_QUERY, root), "name")
+    func_captures = _safe_query(language, _SOL_FUNC_QUERY, root)
+    result.functions = _extract_names(func_captures, "name")
 
     # Events, modifiers, structs, enums -> entities
     events = _extract_names(_safe_query(language, _SOL_EVENT_QUERY, root), "name")
@@ -344,6 +441,12 @@ def analyze_solidity(source: bytes) -> AnalysisResult:
     structs = _extract_names(_safe_query(language, _SOL_STRUCT_QUERY, root), "name")
     enums = _extract_names(_safe_query(language, _SOL_ENUM_QUERY, root), "name")
     result.entities |= events | modifiers | structs | enums
+
+    # Symbol extraction with line numbers
+    func_symbols = _extract_symbols(func_captures, "name", "function", file=file_path)
+    class_symbols = _extract_symbols(contract_captures, "name", "class", file=file_path)
+    _assign_parents(func_symbols, class_symbols)
+    result.symbols = class_symbols + func_symbols
 
     return result
 
@@ -380,15 +483,15 @@ def analyze_file(file_path: str, source: bytes) -> Optional[AnalysisResult]:
         return None
 
     if lang == "python":
-        return analyze_python(source)
+        return analyze_python(source, file_path=file_path)
     elif lang == "typescript":
-        return analyze_typescript(source, is_tsx=False)
+        return analyze_typescript(source, is_tsx=False, file_path=file_path)
     elif lang == "tsx":
-        return analyze_typescript(source, is_tsx=True)
+        return analyze_typescript(source, is_tsx=True, file_path=file_path)
     elif lang == "javascript":
-        return analyze_javascript(source)
+        return analyze_javascript(source, file_path=file_path)
     elif lang == "solidity":
-        return analyze_solidity(source)
+        return analyze_solidity(source, file_path=file_path)
 
     return None
 

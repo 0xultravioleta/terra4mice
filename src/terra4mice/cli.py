@@ -234,6 +234,9 @@ def cmd_state_list(args):
             print(f"    status: {resource.status.value}")
             if resource.files:
                 print(f"    files: {', '.join(resource.files)}")
+            if resource.symbols:
+                impl = sum(1 for s in resource.symbols.values() if s.status == "implemented")
+                print(f"    symbols: {impl}/{len(resource.symbols)}")
 
     return 0
 
@@ -262,6 +265,17 @@ def cmd_state_show(args):
         print(f"depends_on = {resource.depends_on}")
     if resource.attributes:
         print(f"attributes = {resource.attributes}")
+
+    if resource.symbols:
+        implemented = sum(1 for s in resource.symbols.values() if s.status == "implemented")
+        missing_count = sum(1 for s in resource.symbols.values() if s.status == "missing")
+        total = len(resource.symbols)
+        print(f"symbols  = {total} ({implemented} implemented, {missing_count} missing)")
+        for qname, sym in sorted(resource.symbols.items()):
+            status_indicator = "" if sym.status == "implemented" else " [MISSING]"
+            loc = f"lines {sym.line_start}-{sym.line_end}" if sym.line_start else ""
+            file_info = f" ({sym.file})" if sym.file else ""
+            print(f"  {qname:<35} {sym.kind:<10} {loc}{file_info}{status_indicator}")
 
     if resource.created_at:
         print(f"created_at = \"{resource.created_at.isoformat()}\"")

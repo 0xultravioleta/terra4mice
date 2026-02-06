@@ -15,7 +15,7 @@ from pathlib import Path
 from datetime import datetime
 from typing import Union, Optional, List
 
-from .models import State, Resource, ResourceStatus
+from .models import State, Resource, ResourceStatus, SymbolStatus
 
 
 DEFAULT_STATE_FILE = "terra4mice.state.json"
@@ -230,6 +230,18 @@ class StateManager:
             if resource_data.get("updated_at"):
                 resource.updated_at = datetime.fromisoformat(resource_data["updated_at"])
 
+            # Parse symbols (backward-compatible: missing = empty dict)
+            for qname, sym_data in resource_data.get("symbols", {}).items():
+                resource.symbols[qname] = SymbolStatus(
+                    name=sym_data["name"],
+                    kind=sym_data["kind"],
+                    status=sym_data.get("status", "implemented"),
+                    line_start=sym_data.get("line_start", 0),
+                    line_end=sym_data.get("line_end", 0),
+                    parent=sym_data.get("parent", ""),
+                    file=sym_data.get("file", ""),
+                )
+
             state.set(resource)
 
         return state
@@ -238,7 +250,7 @@ class StateManager:
         """Serialize State to JSON-compatible dict."""
         resources = []
         for resource in state.list():
-            resources.append({
+            entry = {
                 "type": resource.type,
                 "name": resource.name,
                 "status": resource.status.value,
@@ -248,7 +260,21 @@ class StateManager:
                 "tests": resource.tests,
                 "created_at": resource.created_at.isoformat() if resource.created_at else None,
                 "updated_at": resource.updated_at.isoformat() if resource.updated_at else None,
-            })
+            }
+            if resource.symbols:
+                entry["symbols"] = {
+                    qname: {
+                        "name": sym.name,
+                        "kind": sym.kind,
+                        "status": sym.status,
+                        "line_start": sym.line_start,
+                        "line_end": sym.line_end,
+                        "parent": sym.parent,
+                        "file": sym.file,
+                    }
+                    for qname, sym in resource.symbols.items()
+                }
+            resources.append(entry)
 
         return {
             "version": state.version,

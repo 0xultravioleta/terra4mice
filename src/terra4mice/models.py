@@ -13,6 +13,25 @@ from typing import Dict, List, Optional, Any
 from datetime import datetime
 
 
+@dataclass
+class SymbolStatus:
+    """Status of an individual symbol (function/class/method) within a resource."""
+
+    name: str
+    kind: str  # "function", "class", "method", "interface", "type", "enum"
+    status: str = "implemented"  # "implemented" | "missing"
+    line_start: int = 0
+    line_end: int = 0
+    parent: str = ""  # "ClassName" for methods
+    file: str = ""
+
+    @property
+    def qualified_name(self) -> str:
+        if self.parent:
+            return f"{self.parent}.{self.name}"
+        return self.name
+
+
 class ResourceStatus(Enum):
     """Status of a resource in the state."""
     MISSING = "missing"           # No existe código
@@ -51,6 +70,9 @@ class Resource:
     # Evidence of implementation
     files: List[str] = field(default_factory=list)       # Files that implement this
     tests: List[str] = field(default_factory=list)       # Tests that cover this
+
+    # Symbol-level tracking (functions, classes, methods)
+    symbols: Dict[str, 'SymbolStatus'] = field(default_factory=dict)
 
     @property
     def address(self) -> str:

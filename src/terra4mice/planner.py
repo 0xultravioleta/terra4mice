@@ -136,6 +136,19 @@ def format_plan(plan: Plan, verbose: bool = False) -> str:
         if action.reason and action.action != "no-op":
             lines.append(f"      # {action.reason}")
 
+        # Show symbol summary in verbose mode
+        if verbose and action.resource.symbols:
+            syms = action.resource.symbols
+            implemented = sum(1 for s in syms.values() if s.status == "implemented")
+            missing_syms = [s for s in syms.values() if s.status == "missing"]
+            total = len(syms)
+            lines.append(f"      Symbols: {implemented}/{total} found")
+            if missing_syms:
+                for ms in missing_syms[:5]:
+                    lines.append(f"        - {ms.qualified_name} (missing)")
+                if len(missing_syms) > 5:
+                    lines.append(f"        ... and {len(missing_syms) - 5} more")
+
     lines.append("")
 
     # Summary

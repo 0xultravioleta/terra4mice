@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import List, Dict, Optional, Set, Tuple
 from dataclasses import dataclass, field
 
-from .models import Spec, State, Resource, ResourceStatus
+from .models import Spec, State, Resource, ResourceStatus, SymbolStatus
 
 try:
     from . import analyzers as ts_analyzers
@@ -39,6 +39,7 @@ class InferenceResult:
     files_found: List[str] = field(default_factory=list)
     tests_found: List[str] = field(default_factory=list)
     reason: str = ""
+    symbols: Dict[str, SymbolStatus] = field(default_factory=dict)
 
 
 @dataclass
@@ -224,10 +225,13 @@ class InferenceEngine:
 
         # Strategy 4: AST analysis (if we found files)
         if result.files_found:
-            ast_confidence = self._analyze_ast(resource, result.files_found)
+            ast_confidence = self._analyze_ast(resource, result.files_found, result)
             if ast_confidence > 0:
                 result.evidence.append(f"AST analysis: {ast_confidence:.0%} match")
                 result.confidence += ast_confidence * 0.3
+
+        # Detect missing symbols from spec attributes
+        self._detect_missing_symbols(resource, result)
 
         # Determine final status based on confidence
         result.confidence = min(result.confidence, 1.0)
@@ -344,7 +348,46 @@ class InferenceEngine:
 
         return found
 
-    def _analyze_ast(self, resource: Resource, files: List[str]) -> float:
+    def _detect_missing_symbols(
+        self, resource: Resource, result: InferenceResult
+    ) -> None:
+        """Check spec attributes for functions/classes not found in code."""
+        spec_functions = resource.attributes.get("functions", [])
+        if isinstance(spec_functions, list):
+            for fn in spec_functions:
+                found = any(s.name == fn for s in result.symbols.values())
+                if not found:
+                    result.symbols[fn] = SymbolStatus(
+                        name=fn, kind="function", status="missing"
+                    )
+
+        spec_class = resource.attributes.get("class")
+        if spec_class and isinstance(spec_class, str):
+            found = any(
+                s.name == spec_class and s.kind == "class"
+                for s in result.symbols.values()
+            )
+            if not found:
+                result.symbols[spec_class] = SymbolStatus(
+                    name=spec_class, kind="class", status="missing"
+                )
+
+        spec_classes = resource.attributes.get("classes", [])
+        if isinstance(spec_classes, list):
+            for cls in spec_classes:
+                found = any(
+                    s.name == cls and s.kind == "class"
+                    for s in result.symbols.values()
+                )
+                if not found:
+                    result.symbols[cls] = SymbolStatus(
+                        name=cls, kind="class", status="missing"
+                    )
+
+    def _analyze_ast(
+        self, resource: Resource, files: List[str],
+        inference_result: InferenceResult = None,
+    ) -> float:
         """
         Analyze files to determine implementation completeness.
 
@@ -385,6 +428,20 @@ class InferenceEngine:
                         score = max(spec_score, base_score)
                         total_score += score
                         analyzed += 1
+
+                        # Collect symbols from tree-sitter analysis
+                        if inference_result is not None and ts_result.symbols:
+                            for sym_info in ts_result.symbols:
+                                inference_result.symbols[sym_info.qualified_name] = SymbolStatus(
+                                    name=sym_info.name,
+                                    kind=sym_info.kind,
+                                    status="implemented",
+                                    line_start=sym_info.line_start,
+                                    line_end=sym_info.line_end,
+                                    parent=sym_info.parent,
+                                    file=file_path,
+                                )
+
                         continue
                 except (IOError, UnicodeDecodeError):
                     pass
@@ -676,7 +733,8 @@ class InferenceEngine:
                 attributes={
                     "inference_confidence": result.confidence,
                     "inference_evidence": result.evidence,
-                }
+                },
+                symbols=result.symbols,
             )
 
             state.set(resource)
@@ -760,6 +818,16 @@ def format_inference_report(results: List[InferenceResult]) -> str:
                 lines.append(f"    Tests: {', '.join(r.tests_found[:3])}")
             if r.evidence and status != "missing":
                 lines.append(f"    Evidence: {r.evidence[0]}")
+
+            # Symbol summary
+            if r.symbols:
+                implemented = sum(1 for s in r.symbols.values() if s.status == "implemented")
+                missing = sum(1 for s in r.symbols.values() if s.status == "missing")
+                total_sym = len(r.symbols)
+                lines.append(f"    Symbols: {implemented}/{total_sym} ({implemented*100//total_sym if total_sym else 0}%)")
+                if missing:
+                    missing_names = [s.qualified_name for s in r.symbols.values() if s.status == "missing"]
+                    lines.append(f"    Missing: {', '.join(missing_names[:5])}")
 
             lines.append("")
 
