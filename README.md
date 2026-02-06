@@ -2,69 +2,69 @@
 
 > State-Driven Development Framework
 >
-> "El software no esta listo cuando funciona, esta listo cuando el state converge con el spec"
+> "Software isn't done when it works. It's done when state converges with spec."
 
-terra4mice aplica el modelo mental de Terraform al desarrollo de software. Mientras Terraform gestiona infraestructura, terra4mice gestiona **desarrollo vivo**.
+terra4mice applies Terraform's mental model to software development. While Terraform manages infrastructure, terra4mice manages **living development**.
 
-## El Problema
+## The Problem
 
-En el vivecoding, pasa esto:
+In livecoding, this happens:
 
-1. Se implementa A
-2. B rompe A
-3. Se hace workaround C
-4. Queda TODO para D
-5. Alguien dice "ya funciona"
-6. Semanas despues: D nunca existio
+1. You implement A
+2. B breaks A
+3. You workaround with C
+4. D becomes a TODO
+5. Someone says "it works"
+6. Weeks later: D never existed
 
-**El sistema no sabe**:
-- Que partes del spec estan completas
-- Que partes estan mockeadas
-- Que partes existen solo en tu cabeza
+**The system doesn't know**:
+- Which parts of the spec are complete
+- Which parts are mocked
+- Which parts only exist in your head
 
-## La Solucion
+## The Solution
 
 ```
-SPEC (desired state)  ->  Lo que DEBE existir (YAML declarativo)
-STATE (current state) ->  Lo que EXISTE (inferido/marcado)
-PLAN (diff)           ->  spec - state = trabajo a hacer
-APPLY (execution)     ->  Ciclos hasta convergencia
+SPEC (desired state)  ->  What SHOULD exist (declarative YAML)
+STATE (current state) ->  What DOES exist (inferred/marked)
+PLAN (diff)           ->  spec - state = work to do
+APPLY (execution)     ->  Cycles until convergence
 ```
 
 ## Quick Start
 
 ```bash
-# Instalar
+# Install
 pip install terra4mice
 
-# Con analisis AST profundo (opcional, Python >=3.10)
+# With deep AST analysis (optional, Python >=3.10)
 pip install terra4mice[ast]
 
-# Inicializar en tu proyecto
+# Initialize in your project
 cd my-project
 terra4mice init
 
-# Ver que falta
+# See what's missing
 terra4mice plan
 
-# Auto-detectar estado del codebase
+# Auto-detect codebase state
 terra4mice refresh
 
-# Listar recursos en state
+# List resources in state
 terra4mice state list
 
-# Marcar algo como implementado
+# Mark something as implemented
 terra4mice mark feature.auth_login --files src/auth.py
 
-# Reporte CI (JSON)
+# CI report (JSON)
 terra4mice ci --format json
 ```
 
-## Comandos
+## Commands
 
 ### `terra4mice init`
 
-Crea archivos de spec y state:
+Creates spec and state files:
 
 ```bash
 terra4mice init
@@ -74,7 +74,7 @@ terra4mice init
 
 ### `terra4mice plan`
 
-Muestra que falta para converger:
+Shows what's needed to converge:
 
 ```
 $ terra4mice plan
@@ -91,9 +91,21 @@ terra4mice will perform the following actions:
 Plan: 2 to create, 1 to update.
 ```
 
+With `--verbose`, plan shows function-level symbol tracking:
+
+```
+$ terra4mice plan --verbose
+
+  ~ module.inference
+      # Resource is partially implemented
+      Symbols: 10/12 found
+        - format_report (missing)
+        - validate_config (missing)
+```
+
 ### `terra4mice refresh`
 
-Auto-detecta el estado del codebase usando multiples estrategias:
+Auto-detects codebase state using multiple strategies:
 
 ```
 $ terra4mice refresh
@@ -107,10 +119,13 @@ IMPLEMENTED (5 resources)
     Confidence: [##########] 100%
     Files: src/models.py
     Evidence: Explicit files found, AST analysis: 100% match
+    Symbols: 12/12 (100%)
 
 PARTIAL (1 resources)
   feature.auth
     Confidence: [######----] 60%
+    Symbols: 5/8 (62%)
+    Missing: validate_token, refresh_session, logout_handler
 
 MISSING (2 resources)
   feature.payments
@@ -120,15 +135,15 @@ Summary
   Convergence: 68.8%
 ```
 
-Estrategias de inferencia (en orden de prioridad):
-1. **tree-sitter AST** (con `[ast]`) - verifica funciones, clases, exports contra spec attributes
-2. **stdlib ast** - analisis Python basico
+Inference strategies (in priority order):
+1. **tree-sitter AST** (with `[ast]`) - verifies functions, classes, exports against spec attributes
+2. **stdlib ast** - basic Python analysis
 3. **Regex** - Solidity, TypeScript/JavaScript patterns
-4. **Heuristica** - tamano de archivos config/docs
+4. **Heuristic** - config/docs file size
 
 ### `terra4mice state list`
 
-Lista todos los recursos en el state:
+Lists all resources in state:
 
 ```
 $ terra4mice state list
@@ -140,37 +155,42 @@ module.payment_processor
 
 ### `terra4mice state show <address>`
 
-Muestra detalles de un recurso:
+Shows resource details including symbol-level tracking:
 
 ```
-$ terra4mice state show feature.auth_login
+$ terra4mice state show module.inference
 
-# feature.auth_login
-type     = "feature"
-name     = "auth_login"
+# module.inference
+type     = "module"
+name     = "inference"
 status   = "implemented"
-files    = ["src/auth.py", "src/routes/login.py"]
-tests    = ["tests/test_auth.py"]
+files    = ["src/terra4mice/inference.py"]
+symbols  = 12 (10 implemented, 2 missing)
+  InferenceEngine                     class      lines 94-686 (src/terra4mice/inference.py)
+  InferenceEngine.infer_all           method     lines 154-178 (src/terra4mice/inference.py)
+  InferenceEngine.infer_resource      method     lines 180-245 (src/terra4mice/inference.py)
+  format_inference_report             function   lines 719-787 (src/terra4mice/inference.py)
+  validate_config                     function   [MISSING]
 ```
 
 ### `terra4mice mark <address>`
 
-Marca un recurso con un status:
+Marks a resource with a status:
 
 ```bash
-# Marcar como implementado
+# Mark as implemented
 terra4mice mark feature.auth_login --files src/auth.py
 
-# Marcar como parcial
+# Mark as partial
 terra4mice mark feature.auth_refresh --status partial --reason "Missing token rotation"
 
-# Marcar como roto
+# Mark as broken
 terra4mice mark feature.auth_logout --status broken --reason "Tests failing"
 ```
 
 ### `terra4mice apply`
 
-Loop interactivo para implementar el plan:
+Interactive apply loop:
 
 ```
 $ terra4mice apply
@@ -186,9 +206,29 @@ Files that implement this: src/auth.py, src/routes/login.py
 Marked as implemented: feature.auth_login
 ```
 
+### `terra4mice diff`
+
+Compare two state snapshots to see what changed:
+
+```
+$ terra4mice diff --old state.json.bak
+
+terra4mice diff
+==================================================
+  Old: state.json.bak (serial 5)
+  New: terra4mice.state.json (serial 8)
+
+Upgraded (3):
+  module.inference: partial -> implemented
+  module.analyzers: missing -> implemented
+  feature.ci: partial -> implemented
+
+Convergence: 45.0% -> 78.3% (+33.3%)
+```
+
 ### `terra4mice ci`
 
-Output para CI/CD pipelines:
+Output for CI/CD pipelines:
 
 ```bash
 # JSON (machine-readable)
@@ -238,22 +278,22 @@ resources:
         - feature.auth_login
 ```
 
-### Spec Attributes para AST Verification
+### Spec Attributes for AST Verification
 
-Con `terra4mice[ast]` instalado, estos atributos se verifican contra el codigo real:
+With `terra4mice[ast]` installed, these attributes are verified against actual code:
 
 ```yaml
 attributes:
-  class: StateManager              # busca en clases
-  functions: [load, save, list]    # busca en funciones definidas
-  entities: [Resource, State]      # busca en clases/interfaces/types/enums
-  exports: [WorkerRatingModal]     # busca en exports (TS/JS)
-  imports: [useState, useEffect]   # busca en imports
-  commands: [init, plan, refresh]  # substring match en funciones
-  strategies: [explicit_files]     # substring match en funciones+clases
+  class: StateManager              # verified in classes
+  functions: [load, save, list]    # verified in defined functions
+  entities: [Resource, State]      # verified in classes/interfaces/types/enums
+  exports: [WorkerRatingModal]     # verified in exports (TS/JS)
+  imports: [useState, useEffect]   # verified in imports
+  commands: [init, plan, refresh]  # substring match in functions
+  strategies: [explicit_files]     # substring match in functions+classes
 ```
 
-Lenguajes soportados: Python, TypeScript/TSX, JavaScript, Solidity.
+Supported languages: Python, TypeScript/TSX, JavaScript, Solidity.
 
 ## State File Format
 
@@ -264,12 +304,25 @@ Lenguajes soportados: Python, TypeScript/TSX, JavaScript, Solidity.
   "last_updated": "2026-01-27T15:30:00",
   "resources": [
     {
-      "type": "feature",
-      "name": "auth_login",
+      "type": "module",
+      "name": "inference",
       "status": "implemented",
-      "files": ["src/auth.py"],
-      "tests": ["tests/test_auth.py"],
-      "created_at": "2026-01-27T14:00:00"
+      "files": ["src/terra4mice/inference.py"],
+      "symbols": {
+        "InferenceEngine": {
+          "name": "InferenceEngine",
+          "kind": "class",
+          "status": "implemented",
+          "line_start": 94,
+          "line_end": 686,
+          "file": "src/terra4mice/inference.py"
+        },
+        "format_report": {
+          "name": "format_report",
+          "kind": "function",
+          "status": "missing"
+        }
+      }
     }
   ]
 }
@@ -300,8 +353,8 @@ jobs:
 
 | Phase | Status | Description |
 |-------|--------|-------------|
-| 1 - MVP CLI | DONE | init, plan, refresh, state, mark, apply, ci |
-| 2 - tree-sitter AST | DONE | Multi-language deep analysis, spec attribute verification |
+| 1 - MVP CLI | DONE | init, plan, refresh, state, mark, apply, ci, diff |
+| 2 - tree-sitter AST | DONE | Multi-language deep analysis, spec attribute verification, symbol tracking |
 | 3 - Multi-AI Contexts | PLANNED | Track which AI (Claude, Codex, Kimi) has context on what |
 | 4 - CI/CD Integration | DONE | GitHub Action, PR comments, convergence badges |
 | 5 - Apply Runner | PLANNED | Interactive apply loop, agent integration |
@@ -309,7 +362,7 @@ jobs:
 
 ### Phase 3: Multi-AI Context Tracking (Next)
 
-Cuando multiples AIs trabajan en el mismo proyecto, cada una lleva su propio contexto aislado. Phase 3 agrega un **context registry** para saber que AI tiene contexto de que:
+When multiple AIs work on the same project, each carries its own isolated context. Phase 3 adds a **context registry** to know which AI has context on what:
 
 ```bash
 terra4mice contexts list
@@ -322,16 +375,16 @@ terra4mice mark module.auth implemented --agent=codex
 terra4mice contexts sync --from=claude-code --to=codex
 ```
 
-## Filosofia
+## Philosophy
 
-1. **Estado antes que intencion** - Lo que existe, no lo que queremos
-2. **Evidencia antes que percepcion** - Tests, no "creo que funciona"
-3. **Convergencia antes que velocidad** - Mejor lento y correcto
-4. **Claridad antes que heroismo** - Plan visible, no magia
+1. **State before intention** - What exists, not what we want
+2. **Evidence before perception** - Tests, not "I think it works"
+3. **Convergence before speed** - Better slow and correct
+4. **Clarity before heroism** - Visible plan, not magic
 
-## Definicion de Completo
+## Definition of Done
 
-Un proyecto esta completo cuando:
+A project is complete when:
 
 ```
 $ terra4mice plan
@@ -339,7 +392,7 @@ $ terra4mice plan
 No changes. State matches spec.
 ```
 
-Nada mas.
+Nothing else.
 
 ## License
 
