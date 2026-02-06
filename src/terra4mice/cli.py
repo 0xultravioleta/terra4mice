@@ -451,6 +451,133 @@ def cmd_apply(args):
     return 0
 
 
+def cmd_diff(args):
+    """Show what changed between two state files or since last refresh."""
+    import json as _json
+    from datetime import datetime
+
+    state_a_path = args.old
+    state_b_path = args.new or args.state
+
+    # Load state A (old)
+    if not state_a_path:
+        print("Error: --old is required (path to previous state file)")
+        print("Tip: copy terra4mice.state.json before running refresh")
+        return 1
+
+    try:
+        with open(state_a_path, 'r', encoding='utf-8') as f:
+            data_a = _json.load(f)
+    except (FileNotFoundError, _json.JSONDecodeError) as e:
+        print(f"Error reading old state: {e}")
+        return 1
+
+    # Load state B (new / current)
+    try:
+        sm = StateManager(state_b_path)
+        sm.load()
+        data_b_resources = {}
+        for r in sm.state.list():
+            data_b_resources[r.address] = r
+    except Exception as e:
+        print(f"Error reading current state: {e}")
+        return 1
+
+    # Build state A resource dict
+    resources_a = {}
+    for r_data in data_a.get("resources", []):
+        addr = f"{r_data['type']}.{r_data['name']}"
+        resources_a[addr] = r_data.get("status", "missing")
+
+    # Compute diff
+    all_addrs = sorted(set(list(resources_a.keys()) + list(data_b_resources.keys())))
+
+    upgraded = []
+    downgraded = []
+    new_resources = []
+    removed = []
+
+    status_rank = {"missing": 0, "broken": 0, "partial": 1, "implemented": 2, "deprecated": 0}
+
+    for addr in all_addrs:
+        old_status = resources_a.get(addr)
+        new_resource = data_b_resources.get(addr)
+        new_status = new_resource.status.value if new_resource else None
+
+        if old_status is None and new_status is not None:
+            new_resources.append((addr, new_status))
+        elif old_status is not None and new_status is None:
+            removed.append((addr, old_status))
+        elif old_status != new_status:
+            old_rank = status_rank.get(old_status, 0)
+            new_rank = status_rank.get(new_status, 0)
+            if new_rank > old_rank:
+                upgraded.append((addr, old_status, new_status))
+            else:
+                downgraded.append((addr, old_status, new_status))
+
+    # Compute convergence delta
+    def _convergence(resources_dict):
+        if not resources_dict:
+            return 0.0
+        scores = {"implemented": 100, "partial": 50, "missing": 0, "broken": 0, "deprecated": 0}
+        total = sum(scores.get(s, 0) for s in resources_dict.values())
+        return total / len(resources_dict)
+
+    conv_a = _convergence(resources_a)
+    conv_b_dict = {addr: r.status.value for addr, r in data_b_resources.items()}
+    conv_b = _convergence(conv_b_dict)
+    delta = conv_b - conv_a
+
+    # Output
+    colors = {"implemented": "\033[32m", "partial": "\033[33m", "missing": "\033[31m", "broken": "\033[31m"}
+    reset = "\033[0m"
+
+    print("terra4mice diff")
+    print("=" * 50)
+    print(f"  Old: {state_a_path} (serial {data_a.get('serial', '?')})")
+    print(f"  New: {state_b_path or 'terra4mice.state.json'} (serial {sm.state.serial})")
+    print()
+
+    if upgraded:
+        print(f"\033[32mUpgraded ({len(upgraded)}):\033[0m")
+        for addr, old, new in upgraded:
+            c = colors.get(new, "")
+            print(f"  {addr}: {old} -> {c}{new}{reset}")
+        print()
+
+    if downgraded:
+        print(f"\033[31mDowngraded ({len(downgraded)}):\033[0m")
+        for addr, old, new in downgraded:
+            c = colors.get(new, "")
+            print(f"  {addr}: {old} -> {c}{new}{reset}")
+        print()
+
+    if new_resources:
+        print(f"\033[32mNew ({len(new_resources)}):\033[0m")
+        for addr, status in new_resources:
+            c = colors.get(status, "")
+            print(f"  + {addr} ({c}{status}{reset})")
+        print()
+
+    if removed:
+        print(f"\033[31mRemoved ({len(removed)}):\033[0m")
+        for addr, status in removed:
+            print(f"  - {addr} (was {status})")
+        print()
+
+    if not (upgraded or downgraded or new_resources or removed):
+        print("  No changes.")
+        print()
+
+    # Convergence summary
+    delta_str = f"+{delta:.1f}" if delta >= 0 else f"{delta:.1f}"
+    delta_color = "\033[32m" if delta >= 0 else "\033[31m"
+    print(f"Convergence: {conv_a:.1f}% -> {conv_b:.1f}% ({delta_color}{delta_str}%{reset})")
+
+    return 0
+
+
 def main():
     """Entry point for terra4mice CLI."""
     parser = argparse.ArgumentParser(
@@ -548,6 +675,14 @@ def main():
     refresh_parser.add_argument("--show-plan", action="store_true",
                                help="Show plan after refresh")
 
+    # diff
+    diff_parser = subparsers.add_parser("diff", help="Show changes between two state files")
+    diff_parser.add_argument("--old", required=True,
+                            help="Path to old state file (e.g., state.json.bak)")
+    diff_parser.add_argument("--new", default=None,
+                            help="Path to new state file (defaults to current)")
+    diff_parser.add_argument("--state", default=None, help="Path to state file")
+
     args = parser.parse_args()
 
     if args.command is None:
@@ -576,6 +711,8 @@ def main():
         return cmd_apply(args)
     elif args.command == "refresh":
         return cmd_refresh(args)
+    elif args.command == "diff":
+        return cmd_diff(args)
 
     return 0
 
