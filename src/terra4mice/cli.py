@@ -343,11 +343,18 @@ def cmd_refresh(args):
         config.source_dirs = args.source_dirs.split(",")
 
     # Run inference
-    print(f"Scanning {config.root_dir} for resources...")
-    print()
+    import sys as _sys
+
+    def _progress(current, total, resource):
+        _sys.stderr.write(f"\rScanning... [{current}/{total}] {resource.address:<40}")
+        _sys.stderr.flush()
+
+    print(f"Scanning {config.root_dir} for resources...", file=_sys.stderr)
 
     engine = InferenceEngine(config)
-    results = engine.infer_all(spec)
+    results = engine.infer_all(spec, progress_callback=_progress)
+    _sys.stderr.write("\r" + " " * 70 + "\r")
+    _sys.stderr.flush()
 
     # Show report
     print(format_inference_report(results))
