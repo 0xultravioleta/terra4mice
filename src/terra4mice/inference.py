@@ -15,8 +15,10 @@ import os
 import re
 import ast
 import glob
+import fnmatch
+import subprocess
 from pathlib import Path
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional, Set, Tuple
 from dataclasses import dataclass, field
 
 from .models import Spec, State, Resource, ResourceStatus
@@ -101,20 +103,75 @@ class InferenceEngine:
 
     def __init__(self, config: InferenceConfig = None):
         self.config = config or InferenceConfig()
+        self._file_index: Optional[Set[str]] = None
 
-    def infer_all(self, spec: Spec) -> List[InferenceResult]:
+    def _build_file_index(self) -> Set[str]:
+        """
+        Build a set of all file paths relative to root_dir.
+
+        Tries git ls-files first (fast, pre-filtered), falls back to os.walk.
+        Called once per infer_all(), then reused for all pattern/test matching.
+        """
+        if self._file_index is not None:
+            return self._file_index
+
+        root = str(self.config.root_dir)
+        files: Set[str] = set()
+
+        # Try git ls-files first (instant, excludes gitignored files)
+        try:
+            result = subprocess.run(
+                ["git", "ls-files"],
+                cwd=root,
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                for line in result.stdout.strip().split("\n"):
+                    line = line.strip()
+                    if line:
+                        # Normalize to forward slashes
+                        files.add(line.replace("\\", "/"))
+                self._file_index = files
+                return files
+        except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+            pass
+
+        # Fallback: os.walk (single pass)
+        exclude_dirs = set(self.config.exclude_dirs)
+        for dirpath, dirnames, filenames in os.walk(root):
+            # Prune excluded directories in-place
+            dirnames[:] = [d for d in dirnames if d not in exclude_dirs]
+            for filename in filenames:
+                full = os.path.join(dirpath, filename)
+                rel = os.path.relpath(full, root).replace("\\", "/")
+                files.add(rel)
+
+        self._file_index = files
+        return files
+
+    def infer_all(self, spec: Spec, progress_callback=None) -> List[InferenceResult]:
         """
         Infer status for all resources in spec.
 
         Args:
             spec: The spec defining desired resources
+            progress_callback: Optional callable(current, total, resource) for progress
 
         Returns:
             List of inference results
         """
+        # Build file index once for all resources
+        self._build_file_index()
+
+        resources = spec.list()
+        total = len(resources)
         results = []
 
-        for resource in spec.list():
+        for i, resource in enumerate(resources):
+            if progress_callback:
+                progress_callback(i + 1, total, resource)
             result = self.infer_resource(resource)
             results.append(result)
 
@@ -214,8 +271,9 @@ class InferenceEngine:
         return False
 
     def _find_by_pattern(self, resource: Resource) -> List[str]:
-        """Find files matching resource patterns."""
+        """Find files matching resource patterns using the file index."""
         found = []
+        file_index = self._file_index or self._build_file_index()
 
         # Get patterns for this resource type
         patterns = list(self.config.file_patterns.get(resource.type, []))
@@ -234,46 +292,52 @@ class InferenceEngine:
         ]
         patterns.extend(generic_patterns)
 
+        # Build resolved patterns
+        resolved_patterns = set()
         for pattern_template in patterns:
-            # Replace {name} with actual resource name
             pattern = pattern_template.format(name=resource.name)
-
-            # Search in source directories
             for source_dir in self.config.source_dirs:
-                search_path = self.config.root_dir / source_dir
-                if not search_path.exists():
-                    continue
+                if source_dir == ".":
+                    resolved_patterns.add(pattern)
+                else:
+                    resolved_patterns.add(f"{source_dir}/{pattern}")
 
-                # Use glob to find matches
-                matches = list(search_path.glob(pattern))
-                for match in matches:
-                    rel_path = str(match.relative_to(self.config.root_dir))
-                    # Skip files in excluded directories
-                    if self._is_excluded(match.relative_to(self.config.root_dir)):
-                        continue
-                    if rel_path not in found:
-                        found.append(rel_path)
+        # Match against file index (in-memory, no filesystem calls)
+        for file_path in file_index:
+            if file_path in found:
+                continue
+            # Check exclusions
+            parts = file_path.split("/")
+            if any(p in self.config.exclude_dirs for p in parts):
+                continue
+            for pattern in resolved_patterns:
+                if fnmatch.fnmatch(file_path, pattern):
+                    found.append(file_path)
+                    break
 
         return found[:10]  # Limit to avoid noise
 
     def _find_tests(self, resource: Resource) -> List[str]:
-        """Find test files for a resource."""
+        """Find test files for a resource using the file index."""
         found = []
+        file_index = self._file_index or self._build_file_index()
 
-        for test_dir in self.config.test_dirs:
-            test_path = self.config.root_dir / test_dir
-            if not test_path.exists():
+        # Build resolved test patterns
+        resolved_patterns = set()
+        for pattern_template in self.config.test_patterns:
+            pattern = pattern_template.format(name=resource.name)
+            for test_dir in self.config.test_dirs:
+                resolved_patterns.add(f"{test_dir}/**/{pattern}")
+                resolved_patterns.add(f"{test_dir}/{pattern}")
+
+        # Match against file index
+        for file_path in file_index:
+            if file_path in found:
                 continue
-
-            for pattern_template in self.config.test_patterns:
-                pattern = pattern_template.format(name=resource.name)
-                matches = list(test_path.glob(f"**/{pattern}"))
-                for match in matches:
-                    rel_path = str(match.relative_to(self.config.root_dir))
-                    if self._is_excluded(match.relative_to(self.config.root_dir)):
-                        continue
-                    if rel_path not in found:
-                        found.append(rel_path)
+            for pattern in resolved_patterns:
+                if fnmatch.fnmatch(file_path, pattern):
+                    found.append(file_path)
+                    break
 
         return found
 
