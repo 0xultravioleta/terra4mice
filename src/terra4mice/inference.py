@@ -199,12 +199,12 @@ class InferenceEngine:
             if found:
                 result.files_found.extend(found)
                 result.evidence.append(f"Explicit files found: {found}")
-                # All files found = high base confidence; partial = proportional
+                # All files found = high confidence; partial = proportional
                 ratio = len(found) / len(resource.files)
                 if ratio >= 1.0:
-                    result.confidence += 0.6  # All declared files exist
+                    result.confidence += 0.8  # All declared files exist
                 else:
-                    result.confidence += 0.4 * ratio
+                    result.confidence += 0.5 * ratio
 
         # Strategy 2: Pattern matching (deduplicate against explicit files)
         pattern_files = self._find_by_pattern(resource)
@@ -212,7 +212,7 @@ class InferenceEngine:
         if pattern_files:
             result.files_found.extend(new_pattern_files)
             result.evidence.append(f"Pattern match files: {pattern_files}")
-            result.confidence += 0.3
+            result.confidence += 0.15
 
         # Strategy 3: Test detection
         test_files = self._find_tests(resource)
