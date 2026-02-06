@@ -157,72 +157,144 @@ Convergence: 0%
 
 ---
 
-## Phase 2: State Inference Avanzada (Semanas 5-8)
+## Phase 2: State Inference Avanzada -- COMPLETADA
 
 ### Objetivo
-Inferencia de estado más inteligente usando AST y tests.
+Inferencia de estado mas inteligente usando AST y tests.
 
-### Entregables
+### Implementado (2026-02-06)
 
-#### 2.1 AST Analysis (Semanas 5-6)
-```python
-# terra4mice/analyzers/python.py
-def analyze_python_file(path: str) -> FileAnalysis:
-    """Extract functions, classes, imports from Python file"""
+#### 2.1 tree-sitter AST Analysis
+- `src/terra4mice/analyzers.py` - Modulo con analisis profundo via tree-sitter
+- Soporte multi-lenguaje: Python, TypeScript/TSX, JavaScript, Solidity
+- `AnalysisResult` dataclass: functions, classes, exports, imports, entities, decorators
+- `score_against_spec()`: verifica atributos del spec contra codigo real
+- `analyze_file()`: dispatch por extension con cache de parsers
+- Dependencia opcional: `pip install terra4mice[ast]`
 
-def match_spec_to_code(spec_feature: Feature, analysis: FileAnalysis) -> MatchResult:
-    """Determine if code implements feature"""
-```
+#### 2.2 Inference Engine Upgrade
+- `inference.py` ahora usa tree-sitter como primera opcion con 5 niveles de fallback:
+  1. tree-sitter (Python, TS, JS, Solidity) -> `score_against_spec()`
+  2. stdlib `ast` (Python)
+  3. regex (Solidity)
+  4. regex (TypeScript/JavaScript) - nuevo `_score_typescript_fallback()`
+  5. size heuristic (config/docs)
+- Patterns extendidos para .tsx y .jsx
 
-**Usar tree-sitter** para:
-- Detectar funciones/clases definidas
-- Encontrar patrones (decorators, return types)
-- Mapear endpoints a handlers
+#### 2.3 Tests
+- `tests/test_analyzers.py` - 48 tests
+- Tests con `skipif` para funcionar con o sin tree-sitter instalado
 
-#### 2.2 Test Integration (Semanas 6-7)
-```python
-# terra4mice/analyzers/tests.py
-def find_tests_for_feature(feature: str, test_dir: str) -> List[TestFile]:
-    """Find tests that cover a feature"""
-
-def run_tests_and_update_state(feature: str) -> TestResult:
-    """Run tests and determine if feature passes"""
-```
-
-**Integración**:
+### Pendiente
 - pytest plugin para reportar a terra4mice
-- Coverage mapping: ¿qué líneas cubre cada test?
-
-#### 2.3 Multi-Language (Semana 8)
-```python
-# terra4mice/analyzers/__init__.py
-ANALYZERS = {
-    "python": PythonAnalyzer,
-    "typescript": TypeScriptAnalyzer,
-    "rust": RustAnalyzer,
-}
-
-def get_analyzer(language: str) -> Analyzer:
-    return ANALYZERS[language]()
-```
-
-### Dogfood Target: 402milly
-
-Por qué 402milly:
-- Frontend TypeScript + Backend Lambdas
-- Spec clara de 1M→402M scaling
-- Tests existentes para validar
+- Coverage mapping
 
 ---
 
-## Phase 3: CI/CD Integration (Semanas 9-10)
+## Phase 3: Multi-AI Context Tracking (Nuevo)
+
+### Objetivo
+Cuando multiples AIs (Claude Code, Codex, Kimi, etc.) trabajan en el mismo proyecto,
+cada una lleva su propio contexto. terra4mice puede servir como **registry centralizado**
+que sabe que AI tiene contexto sobre que parte del codebase.
+
+### Problema
+- Claude Code sabe que modifico `inference.py` pero Codex no lo sabe
+- Kimi trabajo en el frontend pero Claude no tiene ese contexto
+- Los archivos de contexto de cada AI son JSON estructurados pero aislados
+- No hay forma facil de saber "que AI toco que" o "quien sabe de que"
+
+### Solucion: Context Registry
+
+```
+terra4mice contexts list
+# Output:
+# AGENT          RESOURCE              LAST SEEN    STATUS
+# claude-code    module.inference      2min ago     active
+# claude-code    module.analyzers      2min ago     active
+# codex          feature.auth_login    1hr ago      stale
+# kimi-2.5       feature.frontend      30min ago    active
+```
+
+### Entregables
+
+#### 3.1 Context Registry (`src/terra4mice/contexts.py`)
+```python
+@dataclass
+class ContextEntry:
+    agent: str           # "claude-code", "codex", "kimi-2.5"
+    resource: str        # "module.inference"
+    timestamp: datetime
+    files_touched: List[str]
+    confidence: float    # How much context the agent has
+
+@dataclass
+class AgentContext:
+    agent: str
+    entries: Dict[str, ContextEntry]  # resource -> entry
+
+def register_agent(agent: str, resource: str, files: List[str])
+def get_agent_context(agent: str) -> AgentContext
+def list_contexts() -> List[AgentContext]
+def merge_contexts(*contexts: AgentContext) -> AgentContext
+```
+
+#### 3.2 CLI Extensions
+```bash
+# Registrar contexto al hacer mark
+terra4mice mark module.auth implemented --agent=codex
+
+# Ver que AI tiene contexto de que
+terra4mice contexts list
+terra4mice contexts show claude-code
+
+# Sincronizar contextos entre AIs
+terra4mice contexts sync --from=claude-code --to=codex
+```
+
+#### 3.3 Context Export/Import (`src/terra4mice/context_io.py`)
+```python
+# Exportar snapshot para compartir
+def export_context(agent: str, output: Path)
+def import_context(input: Path, agent: str)
+def diff_contexts(a: AgentContext, b: AgentContext) -> ContextDiff
+```
+
+**Formato de export**: JSON estructurado compatible con context files de cada AI
+```json
+{
+  "agent": "claude-code",
+  "project": "terra4mice",
+  "timestamp": "2026-02-06T...",
+  "resources": {
+    "module.inference": {
+      "status": "implemented",
+      "files": ["src/terra4mice/inference.py"],
+      "knowledge": ["tree-sitter integration", "5-level fallback"]
+    }
+  }
+}
+```
+
+### Casos de uso
+1. **Handoff**: Claude Code termina una sesion, exporta contexto, Codex lo importa y continua
+2. **Conflicto detection**: "Codex modifico auth.py pero Claude no sabe" -> warning
+3. **Onboarding**: Nueva AI entra al proyecto, importa contexto global y sabe el estado real
+4. **Audit trail**: "Quien implemento que" como git blame pero para AIs
+
+### Dogfood Target: terra4mice mismo
+- Usar terra4mice para trackear contexto de Claude Code trabajando en terra4mice
+
+---
+
+## Phase 4: CI/CD Integration (previamente Phase 3) -- COMPLETADA
 
 ### Objetivo
 terra4mice como gate en pipelines.
 
 ### Entregables
 
-#### 3.1 GitHub Action
+#### 4.1 GitHub Action
 ```yaml
 # action.yml
 name: 'terra4mice'
@@ -238,7 +310,7 @@ runs:
     - run: terra4mice plan --ci
 ```
 
-#### 3.2 Pre-commit Hook
+#### 4.2 Pre-commit Hook
 ```yaml
 # .pre-commit-config.yaml
 repos:
@@ -248,7 +320,7 @@ repos:
         name: Check spec convergence
 ```
 
-#### 3.3 PR Comments
+#### 4.3 PR Comments
 ```python
 # terra4mice/integrations/github.py
 def post_plan_comment(pr_number: int, plan: Plan):
@@ -278,14 +350,14 @@ Por qué x402-rs:
 
 ---
 
-## Phase 4: Apply Runner (Semanas 11-12)
+## Phase 5: Apply Runner (previamente Phase 4)
 
 ### Objetivo
 Ciclo `apply` que guía implementación.
 
 ### Entregables
 
-#### 4.1 Interactive Apply
+#### 5.1 Interactive Apply
 ```python
 # terra4mice/apply.py
 def apply_interactive(plan: Plan):
@@ -299,7 +371,7 @@ def apply_interactive(plan: Plan):
             print("✓ Action complete")
 ```
 
-#### 4.2 Agent Integration (Council)
+#### 5.2 Agent Integration (Council)
 ```python
 # terra4mice/integrations/council.py
 def provide_plan_to_agent(agent_id: str, plan: Plan):
@@ -313,7 +385,7 @@ def provide_plan_to_agent(agent_id: str, plan: Plan):
 
 ---
 
-## Phase 5: Ecosystem Rollout (Mes 4+)
+## Phase 6: Ecosystem Rollout (previamente Phase 5)
 
 ### Proyectos ordenados por prioridad
 
@@ -344,13 +416,14 @@ def provide_plan_to_agent(agent_id: str, plan: Plan):
 
 ## Métricas de Éxito por Phase
 
-| Phase | Métrica | Target |
-|-------|---------|--------|
-| 1 | CLI funciona en Ultratrack | Plan muestra 9 missing |
-| 2 | State inference accuracy | >80% en Python |
-| 3 | CI integration functional | Blocks PR en x402-rs |
-| 4 | Apply loop works | Developer completa feature guiado |
-| 5 | Ecosystem adoption | 5+ proyectos usando |
+| Phase | Métrica | Target | Estado |
+|-------|---------|--------|--------|
+| 1 | CLI funciona en Ultratrack | Plan muestra 9 missing | DONE |
+| 2 | State inference accuracy | >80% en Python | DONE |
+| 3 | Multi-AI context tracking | Contexto compartido entre 2+ AIs | PENDIENTE |
+| 4 | CI integration functional | Blocks PR en x402-rs | DONE |
+| 5 | Apply loop works | Developer completa feature guiado | PENDIENTE |
+| 6 | Ecosystem adoption | 5+ proyectos usando | PENDIENTE |
 
 ---
 

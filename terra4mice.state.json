@@ -1,7 +1,7 @@
 {
   "version": "1",
-  "serial": 27,
-  "last_updated": "2026-02-03T03:05:51.764631",
+  "serial": 74,
+  "last_updated": "2026-02-06T15:22:34.071117",
   "resources": [
     {
       "type": "config",
@@ -19,8 +19,8 @@
         "pyproject.toml"
       ],
       "tests": [],
-      "created_at": "2026-02-03T03:05:51.764591",
-      "updated_at": "2026-02-03T03:05:51.764585"
+      "created_at": null,
+      "updated_at": "2026-02-06T15:22:34.071117"
     },
     {
       "type": "docs",
@@ -38,8 +38,8 @@
         "PLAN.md"
       ],
       "tests": [],
-      "created_at": "2026-02-03T03:05:51.764597",
-      "updated_at": "2026-02-03T03:05:51.764596"
+      "created_at": null,
+      "updated_at": "2026-02-06T15:22:34.071117"
     },
     {
       "type": "docs",
@@ -57,8 +57,8 @@
         "PROGRESS.md"
       ],
       "tests": [],
-      "created_at": "2026-02-03T03:05:51.764601",
-      "updated_at": "2026-02-03T03:05:51.764600"
+      "created_at": null,
+      "updated_at": "2026-02-06T15:22:34.071117"
     },
     {
       "type": "docs",
@@ -76,8 +76,8 @@
         "README.md"
       ],
       "tests": [],
-      "created_at": "2026-02-03T03:05:51.764603",
-      "updated_at": "2026-02-03T03:05:51.764603"
+      "created_at": null,
+      "updated_at": "2026-02-06T15:22:34.071117"
     },
     {
       "type": "docs",
@@ -95,8 +95,8 @@
         "SPEC.md"
       ],
       "tests": [],
-      "created_at": "2026-02-03T03:05:51.764606",
-      "updated_at": "2026-02-03T03:05:51.764605"
+      "created_at": null,
+      "updated_at": "2026-02-06T15:22:34.071117"
     },
     {
       "type": "dogfood",
@@ -108,8 +108,8 @@
         "~/clawd/projects/describe-net-contracts/terra4mice.spec.yaml"
       ],
       "tests": [],
-      "created_at": "2026-02-03T03:05:51.764630",
-      "updated_at": "2026-02-03T03:05:51.764630"
+      "created_at": "2026-02-06T15:22:33.269911",
+      "updated_at": "2026-02-06T15:22:33.269911"
     },
     {
       "type": "example",
@@ -128,8 +128,8 @@
         "examples/demo-project/terra4mice.state.json"
       ],
       "tests": [],
-      "created_at": "2026-02-03T03:05:51.764608",
-      "updated_at": "2026-02-03T03:05:51.764608"
+      "created_at": null,
+      "updated_at": "2026-02-06T15:22:34.071117"
     },
     {
       "type": "example",
@@ -148,19 +148,18 @@
         "examples/ultratrack-demo/terra4mice.state.json"
       ],
       "tests": [],
-      "created_at": "2026-02-03T03:05:51.764610",
-      "updated_at": "2026-02-03T03:05:51.764610"
+      "created_at": null,
+      "updated_at": "2026-02-06T15:22:34.071117"
     },
     {
-      "type": "module",
-      "name": "cli",
-      "status": "implemented",
+      "type": "feature",
+      "name": "context_cli",
+      "status": "partial",
       "attributes": {
-        "inference_confidence": 0.96,
+        "inference_confidence": 0.69,
         "inference_evidence": [
           "Explicit files found: ['src/terra4mice/cli.py']",
-          "Pattern match files: ['src/terra4mice/cli.py']",
-          "AST analysis: 20% match"
+          "AST analysis: 30% match"
         ]
       },
       "depends_on": [],
@@ -168,85 +167,138 @@
         "src/terra4mice/cli.py"
       ],
       "tests": [],
-      "created_at": "2026-02-03T03:05:51.764612",
-      "updated_at": "2026-02-03T03:05:51.764612"
+      "created_at": null,
+      "updated_at": "2026-02-06T15:22:34.071117"
+    },
+    {
+      "type": "module",
+      "name": "analyzers",
+      "status": "implemented",
+      "attributes": {
+        "inference_confidence": 1.0,
+        "inference_evidence": [
+          "Explicit files found: ['src/terra4mice/analyzers.py']",
+          "Pattern match files: ['src\\\\terra4mice\\\\analyzers.py', 'tests\\\\test_analyzers.py']",
+          "Tests found: ['tests\\\\test_analyzers.py']",
+          "AST analysis: 77% match"
+        ]
+      },
+      "depends_on": [],
+      "files": [
+        "src/terra4mice/analyzers.py",
+        "src\\terra4mice\\analyzers.py",
+        "tests\\test_analyzers.py"
+      ],
+      "tests": [
+        "tests\\test_analyzers.py"
+      ],
+      "created_at": null,
+      "updated_at": "2026-02-06T15:22:34.071117"
+    },
+    {
+      "type": "module",
+      "name": "cli",
+      "status": "implemented",
+      "attributes": {
+        "inference_confidence": 1.0,
+        "inference_evidence": [
+          "Explicit files found: ['src/terra4mice/cli.py']",
+          "Pattern match files: ['src\\\\terra4mice\\\\cli.py']",
+          "AST analysis: 100% match"
+        ]
+      },
+      "depends_on": [],
+      "files": [
+        "src/terra4mice/cli.py",
+        "src\\terra4mice\\cli.py"
+      ],
+      "tests": [],
+      "created_at": null,
+      "updated_at": "2026-02-06T15:22:34.071117"
     },
     {
       "type": "module",
       "name": "inference",
       "status": "implemented",
       "attributes": {
-        "inference_confidence": 1.0,
+        "inference_confidence": 0.9999999999999999,
         "inference_evidence": [
           "Explicit files found: ['src/terra4mice/inference.py']",
-          "Pattern match files: ['src/terra4mice/inference.py']",
-          "AST analysis: 50% match"
+          "Pattern match files: ['src\\\\terra4mice\\\\inference.py']",
+          "AST analysis: 33% match"
         ]
       },
       "depends_on": [],
       "files": [
-        "src/terra4mice/inference.py"
+        "src/terra4mice/inference.py",
+        "src\\terra4mice\\inference.py"
       ],
       "tests": [],
-      "created_at": "2026-02-03T03:05:51.764614",
-      "updated_at": "2026-02-03T03:05:51.764614"
+      "created_at": null,
+      "updated_at": "2026-02-06T15:22:34.071117"
     },
     {
       "type": "module",
       "name": "models",
       "status": "implemented",
       "attributes": {
-        "inference_confidence": 0.8999999999999999,
+        "inference_confidence": 1.0,
         "inference_evidence": [
           "Explicit files found: ['src/terra4mice/models.py']",
-          "Pattern match files: ['src/terra4mice/models.py']"
+          "Pattern match files: ['src\\\\terra4mice\\\\models.py']",
+          "AST analysis: 100% match"
         ]
       },
       "depends_on": [],
       "files": [
-        "src/terra4mice/models.py"
+        "src/terra4mice/models.py",
+        "src\\terra4mice\\models.py"
       ],
       "tests": [],
-      "created_at": "2026-02-03T03:05:51.764616",
-      "updated_at": "2026-02-03T03:05:51.764616"
+      "created_at": null,
+      "updated_at": "2026-02-06T15:22:34.071117"
     },
     {
       "type": "module",
       "name": "planner",
       "status": "implemented",
       "attributes": {
-        "inference_confidence": 0.8999999999999999,
+        "inference_confidence": 1.0,
         "inference_evidence": [
           "Explicit files found: ['src/terra4mice/planner.py']",
-          "Pattern match files: ['src/terra4mice/planner.py']"
+          "Pattern match files: ['src\\\\terra4mice\\\\planner.py']",
+          "AST analysis: 100% match"
         ]
       },
       "depends_on": [],
       "files": [
-        "src/terra4mice/planner.py"
+        "src/terra4mice/planner.py",
+        "src\\terra4mice\\planner.py"
       ],
       "tests": [],
-      "created_at": "2026-02-03T03:05:51.764618",
-      "updated_at": "2026-02-03T03:05:51.764618"
+      "created_at": null,
+      "updated_at": "2026-02-06T15:22:34.071117"
     },
     {
       "type": "module",
       "name": "spec_parser",
       "status": "implemented",
       "attributes": {
-        "inference_confidence": 0.8999999999999999,
+        "inference_confidence": 1.0,
         "inference_evidence": [
           "Explicit files found: ['src/terra4mice/spec_parser.py']",
-          "Pattern match files: ['src/terra4mice/spec_parser.py']"
+          "Pattern match files: ['src\\\\terra4mice\\\\spec_parser.py']",
+          "AST analysis: 100% match"
         ]
       },
       "depends_on": [],
       "files": [
-        "src/terra4mice/spec_parser.py"
+        "src/terra4mice/spec_parser.py",
+        "src\\terra4mice\\spec_parser.py"
       ],
       "tests": [],
-      "created_at": "2026-02-03T03:05:51.764621",
-      "updated_at": "2026-02-03T03:05:51.764620"
+      "created_at": null,
+      "updated_at": "2026-02-06T15:22:34.071117"
     },
     {
       "type": "module",
@@ -256,17 +308,18 @@
         "inference_confidence": 1.0,
         "inference_evidence": [
           "Explicit files found: ['src/terra4mice/state_manager.py']",
-          "Pattern match files: ['src/terra4mice/state_manager.py']",
-          "AST analysis: 50% match"
+          "Pattern match files: ['src\\\\terra4mice\\\\state_manager.py']",
+          "AST analysis: 100% match"
         ]
       },
       "depends_on": [],
       "files": [
-        "src/terra4mice/state_manager.py"
+        "src/terra4mice/state_manager.py",
+        "src\\terra4mice\\state_manager.py"
       ],
       "tests": [],
-      "created_at": "2026-02-03T03:05:51.764623",
-      "updated_at": "2026-02-03T03:05:51.764623"
+      "created_at": null,
+      "updated_at": "2026-02-06T15:22:34.071117"
     }
   ]
 }

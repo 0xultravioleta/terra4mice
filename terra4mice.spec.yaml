@@ -58,6 +58,16 @@ resources:
       depends_on:
         - module.models
 
+    analyzers:
+      attributes:
+        description: "Tree-sitter AST analysis for deep code verification against spec attributes"
+        functions: [analyze_python, analyze_typescript, analyze_javascript, analyze_solidity, analyze_file, score_against_spec, is_available]
+        entities: [AnalysisResult]
+        languages: [python, typescript, tsx, javascript, solidity]
+      files:
+        - src/terra4mice/analyzers.py
+      depends_on: []
+
     cli:
       attributes:
         description: "CLI interface with subcommands: init, plan, refresh, state, mark, apply"
@@ -120,6 +130,38 @@ resources:
       files:
         - PROGRESS.md
       depends_on: []
+
+  # Phase 3: Multi-AI Context Tracking
+  feature:
+    context_registry:
+      attributes:
+        description: "Track which AI agent has context on which resources. Shared awareness across Claude Code, Codex, Kimi, etc."
+        functions: [register_agent, get_agent_context, list_contexts, merge_contexts]
+        entities: [AgentContext, ContextEntry]
+      files:
+        - src/terra4mice/contexts.py
+      depends_on:
+        - module.models
+        - module.state_manager
+
+    context_cli:
+      attributes:
+        description: "CLI subcommands for multi-AI context: contexts list, contexts show, mark --agent"
+        commands: [contexts_list, contexts_show, contexts_sync]
+      files:
+        - src/terra4mice/cli.py
+      depends_on:
+        - feature.context_registry
+        - module.cli
+
+    context_export:
+      attributes:
+        description: "Export/import context snapshots as JSON for sharing between AI agents"
+        functions: [export_context, import_context, diff_contexts]
+      files:
+        - src/terra4mice/context_io.py
+      depends_on:
+        - feature.context_registry
 
   # Config
   config:
