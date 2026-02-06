@@ -1,0 +1,258 @@
+"""
+State Manager - Track what resources exist in your codebase.
+
+The state file (terra4mice.state.json) tracks:
+- Which resources have been created (implemented)
+- Their current status
+- Evidence (files, tests)
+- Timestamps
+
+Similar to terraform.tfstate
+"""
+
+import json
+from pathlib import Path
+from datetime import datetime
+from typing import Union, Optional, List
+
+from .models import State, Resource, ResourceStatus
+
+
+DEFAULT_STATE_FILE = "terra4mice.state.json"
+
+
+class StateManager:
+    """
+    Manages the terra4mice state file.
+
+    Usage:
+        sm = StateManager()
+        sm.load()
+        sm.mark_created("feature.auth_login", files=["src/auth.py"])
+        sm.save()
+    """
+
+    def __init__(self, path: Union[str, Path] = None):
+        """
+        Initialize state manager.
+
+        Args:
+            path: Path to state file. Defaults to terra4mice.state.json
+        """
+        if path is None:
+            path = Path.cwd() / DEFAULT_STATE_FILE
+        else:
+            path = Path(path)
+
+        self.path = path
+        self.state = State()
+
+    def load(self) -> State:
+        """
+        Load state from file.
+
+        Returns:
+            State object (empty if file doesn't exist)
+        """
+        if not self.path.exists():
+            self.state = State()
+            return self.state
+
+        with open(self.path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+
+        self.state = self._parse_state(data)
+        return self.state
+
+    def save(self) -> None:
+        """Save state to file."""
+        data = self._serialize_state(self.state)
+
+        with open(self.path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2, default=str)
+
+    def list(self, type_filter: Optional[str] = None) -> List[Resource]:
+        """
+        List all resources in state.
+
+        Equivalent to: terraform state list
+
+        Args:
+            type_filter: Optional filter by resource type
+
+        Returns:
+            List of resources
+        """
+        return self.state.list(type_filter)
+
+    def show(self, address: str) -> Optional[Resource]:
+        """
+        Show details of a specific resource.
+
+        Equivalent to: terraform state show <address>
+
+        Args:
+            address: Resource address (type.name)
+
+        Returns:
+            Resource or None if not found
+        """
+        return self.state.get(address)
+
+    def mark_created(
+        self,
+        address: str,
+        files: List[str] = None,
+        tests: List[str] = None,
+        attributes: dict = None,
+    ) -> Resource:
+        """
+        Mark a resource as created (implemented).
+
+        This is called when you've implemented something and want to
+        record it in the state.
+
+        Args:
+            address: Resource address (type.name)
+            files: Files that implement this resource
+            tests: Tests that cover this resource
+            attributes: Additional attributes
+
+        Returns:
+            The created/updated resource
+        """
+        resource_type, resource_name = address.split(".", 1)
+
+        existing = self.state.get(address)
+        if existing:
+            resource = existing
+            resource.status = ResourceStatus.IMPLEMENTED
+        else:
+            resource = Resource(
+                type=resource_type,
+                name=resource_name,
+                status=ResourceStatus.IMPLEMENTED,
+            )
+
+        if files:
+            resource.files = files
+        if tests:
+            resource.tests = tests
+        if attributes:
+            resource.attributes.update(attributes)
+
+        self.state.set(resource)
+        return resource
+
+    def mark_partial(self, address: str, reason: str = "") -> Resource:
+        """
+        Mark a resource as partially implemented.
+
+        Args:
+            address: Resource address
+            reason: Why it's partial
+
+        Returns:
+            Updated resource
+        """
+        resource = self.state.get(address)
+        if resource is None:
+            resource_type, resource_name = address.split(".", 1)
+            resource = Resource(type=resource_type, name=resource_name)
+
+        resource.status = ResourceStatus.PARTIAL
+        if reason:
+            resource.attributes["partial_reason"] = reason
+
+        self.state.set(resource)
+        return resource
+
+    def mark_broken(self, address: str, reason: str = "") -> Resource:
+        """
+        Mark a resource as broken.
+
+        Args:
+            address: Resource address
+            reason: Why it's broken
+
+        Returns:
+            Updated resource
+        """
+        resource = self.state.get(address)
+        if resource is None:
+            resource_type, resource_name = address.split(".", 1)
+            resource = Resource(type=resource_type, name=resource_name)
+
+        resource.status = ResourceStatus.BROKEN
+        if reason:
+            resource.attributes["broken_reason"] = reason
+
+        self.state.set(resource)
+        return resource
+
+    def remove(self, address: str) -> Optional[Resource]:
+        """
+        Remove a resource from state.
+
+        Equivalent to: terraform state rm <address>
+
+        Args:
+            address: Resource address
+
+        Returns:
+            Removed resource or None
+        """
+        return self.state.remove(address)
+
+    def _parse_state(self, data: dict) -> State:
+        """Parse JSON data into State object."""
+        state = State(
+            version=data.get("version", "1"),
+            serial=data.get("serial", 0),
+        )
+
+        if "last_updated" in data and data["last_updated"]:
+            state.last_updated = datetime.fromisoformat(data["last_updated"])
+
+        for resource_data in data.get("resources", []):
+            resource = Resource(
+                type=resource_data["type"],
+                name=resource_data["name"],
+                status=ResourceStatus(resource_data.get("status", "missing")),
+                attributes=resource_data.get("attributes", {}),
+                depends_on=resource_data.get("depends_on", []),
+                files=resource_data.get("files", []),
+                tests=resource_data.get("tests", []),
+            )
+
+            if resource_data.get("created_at"):
+                resource.created_at = datetime.fromisoformat(resource_data["created_at"])
+            if resource_data.get("updated_at"):
+                resource.updated_at = datetime.fromisoformat(resource_data["updated_at"])
+
+            state.set(resource)
+
+        return state
+
+    def _serialize_state(self, state: State) -> dict:
+        """Serialize State to JSON-compatible dict."""
+        resources = []
+        for resource in state.list():
+            resources.append({
+                "type": resource.type,
+                "name": resource.name,
+                "status": resource.status.value,
+                "attributes": resource.attributes,
+                "depends_on": resource.depends_on,
+                "files": resource.files,
+                "tests": resource.tests,
+                "created_at": resource.created_at.isoformat() if resource.created_at else None,
+                "updated_at": resource.updated_at.isoformat() if resource.updated_at else None,
+            })
+
+        return {
+            "version": state.version,
+            "serial": state.serial,
+            "last_updated": state.last_updated.isoformat() if state.last_updated else None,
+            "resources": resources,
+        }

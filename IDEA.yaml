@@ -1,0 +1,114 @@
+name: terra4mice
+title: "Terra4Mice: State-Driven Development Framework"
+status: incubating
+priority: critical
+created: "2026-01-27"
+updated: "2026-01-27"
+author: "ElBitterX (voice idea)"
+
+description: |
+  Framework de desarrollo state-driven inspirado en Terraform.
+  Mantiene sincronizado el desarrollo real con la especificación declarativa.
+
+  Principio: "El software no está listo cuando funciona, está listo cuando
+  el state converge con el spec"
+
+# Synergy scores (0-10) - Consolidado de 4 sub-agents
+synergies:
+  # CAPA COMUNICACIÓN (avg: 7.5)
+  telemesh: 8
+  meshrelay: 7
+  colmena: 9
+  chainwitness: 6
+
+  # CAPA PAGOS (avg: 7.2)
+  x402-rs: 9
+  x402cloud: 7
+  402milly: 8
+  uvd-x402-sdk-python: 6
+  uvd-x402-sdk-typescript: 6
+
+  # CAPA AGENTES (avg: 6.3)
+  council: 8
+  enclaveops: 6
+  faro: 5
+
+  # CAPA INTELIGENCIA (avg: 9.0)
+  karmacadabra: 9
+  karma-hello: 8
+  abracadabra: 9
+  ultratrack: 10
+
+average_synergy: 7.5
+
+# Top synergies for quick reference
+top_synergies:
+  - project: ultratrack
+    score: 10
+    reason: "Spec-only (200+ líneas), CERO código - caso perfecto"
+  - project: colmena
+    score: 9
+    reason: "Diseñado state-driven desde inicio, validación cell health"
+  - project: x402-rs
+    score: 9
+    reason: "Facilitador crítico, 18 networks, spec-drift costoso"
+  - project: karmacadabra
+    score: 9
+    reason: "48 agentes, unclear production vs demo - Phase 4 dogfood"
+  - project: abracadabra
+    score: 9
+    reason: "Phase 1 done, bloqueado esperando format - visibility needed"
+  - project: council
+    score: 8
+    reason: "Puede usar terra4mice para saber cuándo threads convergen"
+
+# Patterns aplicables
+patterns:
+  - declarative-state-management
+  - plan-apply-cycle
+  - infrastructure-as-code
+  - convergence-verification
+  - ci-cd-gates
+
+# Tools que podría usar/integrar
+tools:
+  - terraform (modelo mental)
+  - git (versionado de specs)
+  - yaml-parsers
+  - ast-analysis (inferencia de state)
+  - test-coverage-tools
+
+# Graduation criteria
+graduation_criteria:
+  - "CLI funcional: terra4mice plan, terra4mice apply"
+  - "Spec format definido (YAML schema)"
+  - "State inference para al menos 1 lenguaje (Python o TypeScript)"
+  - "Integración CI/CD demostrada"
+  - "Dogfooding exitoso en 2+ proyectos del ecosistema"
+  - "Documentación y README completo"
+
+# Philosophical principles
+principles:
+  - "Estado antes que intención"
+  - "Evidencia antes que percepción"
+  - "Convergencia antes que velocidad"
+  - "Claridad antes que heroísmo"
+
+# Tags for discovery
+tags:
+  - development-tooling
+  - state-driven
+  - terraform-inspired
+  - vivecoding
+  - spec-management
+  - ci-cd
+  - convergence
+  - public-good
+  - open-source
+  - developer-experience
+
+# Open source strategy
+open_source:
+  license: "MIT"
+  goal: "Public good - tooling para toda la comunidad de developers"
+  approach: "Desarrollar incrementalmente, dogfoodear en ecosistema UVD"

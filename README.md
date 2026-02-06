@@ -1,0 +1,248 @@
+# terra4mice
+
+> State-Driven Development Framework
+>
+> "El software no está listo cuando funciona, está listo cuando el state converge con el spec"
+
+terra4mice aplica el modelo mental de Terraform al desarrollo de software. Mientras Terraform gestiona infraestructura, terra4mice gestiona **desarrollo vivo**.
+
+## El Problema
+
+En el vivecoding, pasa esto:
+
+1. Se implementa A
+2. B rompe A
+3. Se hace workaround C
+4. Queda TODO para D
+5. Alguien dice "ya funciona"
+6. Semanas después: D nunca existió
+
+**El sistema no sabe**:
+- Qué partes del spec están completas
+- Qué partes están mockeadas
+- Qué partes existen solo en tu cabeza
+
+## La Solución
+
+```
+SPEC (desired state)  →  Lo que DEBE existir (YAML declarativo)
+STATE (current state) →  Lo que EXISTE (inferido/marcado)
+PLAN (diff)           →  spec - state = trabajo a hacer
+APPLY (execution)     →  Ciclos hasta convergencia
+```
+
+## Quick Start
+
+```bash
+# Instalar
+pip install terra4mice
+
+# Inicializar en tu proyecto
+cd my-project
+terra4mice init
+
+# Ver qué falta
+terra4mice plan
+
+# Listar recursos en state
+terra4mice state list
+
+# Marcar algo como implementado
+terra4mice mark feature.auth_login --files src/auth.py
+
+# Ver plan actualizado
+terra4mice plan
+```
+
+## Comandos
+
+### `terra4mice init`
+
+Crea archivos de spec y state:
+
+```bash
+terra4mice init
+# Created: terra4mice.spec.yaml
+# Created: terra4mice.state.json
+```
+
+### `terra4mice plan`
+
+Muestra qué falta para converger:
+
+```
+$ terra4mice plan
+
+terra4mice will perform the following actions:
+
+  + feature.auth_login
+      # Resource declared in spec but not in state
+  + feature.auth_refresh
+      # Resource declared in spec but not in state
+  ~ feature.auth_logout
+      # Resource is partially implemented
+
+Plan: 2 to create, 1 to update.
+```
+
+### `terra4mice state list`
+
+Lista todos los recursos en el state:
+
+```
+$ terra4mice state list
+
+feature.auth_login
+feature.auth_refresh
+module.payment_processor
+```
+
+### `terra4mice state show <address>`
+
+Muestra detalles de un recurso:
+
+```
+$ terra4mice state show feature.auth_login
+
+# feature.auth_login
+type     = "feature"
+name     = "auth_login"
+status   = "implemented"
+files    = ["src/auth.py", "src/routes/login.py"]
+tests    = ["tests/test_auth.py"]
+```
+
+### `terra4mice mark <address>`
+
+Marca un recurso con un status:
+
+```bash
+# Marcar como implementado
+terra4mice mark feature.auth_login --files src/auth.py
+
+# Marcar como parcial
+terra4mice mark feature.auth_refresh --status partial --reason "Missing token rotation"
+
+# Marcar como roto
+terra4mice mark feature.auth_logout --status broken --reason "Tests failing"
+```
+
+### `terra4mice apply`
+
+Loop interactivo para implementar el plan:
+
+```
+$ terra4mice apply
+
+============================================================
+Next: + feature.auth_login
+      Resource declared in spec but not in state
+
+Attributes: {'endpoints': ['POST /auth/login']}
+
+Action: [i]mplement, [p]artial, [s]kip, [q]uit? i
+Files that implement this: src/auth.py, src/routes/login.py
+Marked as implemented: feature.auth_login
+```
+
+## Spec File Format
+
+```yaml
+# terra4mice.spec.yaml
+version: "1"
+
+resources:
+  feature:
+    auth_login:
+      attributes:
+        description: "User login"
+        endpoints: [POST /auth/login]
+      depends_on: []
+
+    auth_refresh:
+      attributes:
+        description: "Token refresh"
+      depends_on:
+        - feature.auth_login
+
+  endpoint:
+    api_users:
+      attributes:
+        method: GET
+        path: /api/users
+      depends_on:
+        - feature.auth_login
+
+  module:
+    payment_processor:
+      attributes:
+        provider: x402
+```
+
+## State File Format
+
+```json
+{
+  "version": "1",
+  "serial": 3,
+  "last_updated": "2026-01-27T15:30:00",
+  "resources": [
+    {
+      "type": "feature",
+      "name": "auth_login",
+      "status": "implemented",
+      "files": ["src/auth.py"],
+      "tests": ["tests/test_auth.py"],
+      "created_at": "2026-01-27T14:00:00"
+    }
+  ]
+}
+```
+
+## CI/CD Integration
+
+```yaml
+# .github/workflows/terra4mice.yml
+name: Check Convergence
+
+on: [push, pull_request]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install terra4mice
+      - run: terra4mice plan --detailed-exitcode
+        # Returns 2 if there are pending changes
+```
+
+## Filosofía
+
+1. **Estado antes que intención** - Lo que existe, no lo que queremos
+2. **Evidencia antes que percepción** - Tests, no "creo que funciona"
+3. **Convergencia antes que velocidad** - Mejor lento y correcto
+4. **Claridad antes que heroísmo** - Plan visible, no magia
+
+## Definición de Completo
+
+Un proyecto está completo cuando:
+
+```
+$ terra4mice plan
+
+No changes. State matches spec.
+```
+
+Nada más.
+
+## License
+
+MIT - Public good for the developer community.
+
+## Contributing
+
+PRs welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.

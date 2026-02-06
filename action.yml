@@ -1,0 +1,157 @@
+name: 'terra4mice Plan'
+description: 'Run terra4mice CI to check codebase convergence against spec'
+author: 'Ultravioleta DAO'
+
+branding:
+  icon: 'check-circle'
+  color: 'purple'
+
+inputs:
+  spec_file:
+    description: 'Path to spec file'
+    required: false
+    default: 'terra4mice.spec.yaml'
+  state_file:
+    description: 'Path to state file'
+    required: false
+    default: 'terra4mice.state.json'
+  fail_on_incomplete:
+    description: 'Fail if convergence is not 100%'
+    required: false
+    default: 'false'
+  fail_under:
+    description: 'Fail if convergence is below this percentage'
+    required: false
+    default: ''
+  python_version:
+    description: 'Python version to use'
+    required: false
+    default: '3.11'
+  post_comment:
+    description: 'Post plan as PR comment'
+    required: false
+    default: 'true'
+
+outputs:
+  convergence:
+    description: 'Convergence percentage'
+    value: ${{ steps.plan.outputs.convergence }}
+  has_changes:
+    description: 'Whether there are pending changes'
+    value: ${{ steps.plan.outputs.has_changes }}
+  plan_summary:
+    description: 'Plan summary text'
+    value: ${{ steps.plan.outputs.plan_summary }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python_version }}
+
+    - name: Install terra4mice
+      shell: bash
+      run: |
+        pip install --quiet .
+
+    - name: Run terra4mice CI
+      id: plan
+      shell: bash
+      run: |
+        set +e
+
+        # Build command
+        CMD="terra4mice ci"
+        CMD="$CMD --spec ${{ inputs.spec_file }}"
+        CMD="$CMD --state ${{ inputs.state_file }}"
+        CMD="$CMD --format json"
+        CMD="$CMD --output terra4mice-plan.json"
+        CMD="$CMD --comment terra4mice-comment.md"
+
+        if [ "${{ inputs.fail_on_incomplete }}" = "true" ]; then
+          CMD="$CMD --fail-on-incomplete"
+        fi
+
+        if [ -n "${{ inputs.fail_under }}" ]; then
+          CMD="$CMD --fail-under ${{ inputs.fail_under }}"
+        fi
+
+        # Run
+        $CMD
+        EXIT_CODE=$?
+
+        # Parse JSON output for step outputs
+        if [ -f terra4mice-plan.json ]; then
+          CONVERGENCE=$(python3 -c "import json; d=json.load(open('terra4mice-plan.json')); print(d.get('convergence', 0))")
+          HAS_CHANGES=$(python3 -c "import json; d=json.load(open('terra4mice-plan.json')); print(str(d.get('has_changes', False)).lower())")
+
+          echo "convergence=$CONVERGENCE" >> "$GITHUB_OUTPUT"
+          echo "has_changes=$HAS_CHANGES" >> "$GITHUB_OUTPUT"
+
+          # Build summary
+          TOTAL=$(python3 -c "import json; d=json.load(open('terra4mice-plan.json')); print(d.get('total_resources', 0))")
+          IMPL=$(python3 -c "import json; d=json.load(open('terra4mice-plan.json')); print(d.get('implemented', 0))")
+          echo "plan_summary=${CONVERGENCE}% convergence (${IMPL}/${TOTAL} implemented)" >> "$GITHUB_OUTPUT"
+        else
+          echo "convergence=0" >> "$GITHUB_OUTPUT"
+          echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          echo "plan_summary=Failed to generate plan" >> "$GITHUB_OUTPUT"
+        fi
+
+        # Store exit code for later
+        echo "exit_code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
+
+    - name: Post PR Comment
+      if: inputs.post_comment == 'true' && github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const commentFile = 'terra4mice-comment.md';
+
+          if (!fs.existsSync(commentFile)) {
+            console.log('No comment file found, skipping');
+            return;
+          }
+
+          const body = fs.readFileSync(commentFile, 'utf8');
+          const { owner, repo } = context.repo;
+          const issue_number = context.issue.number;
+
+          // Find existing comment
+          const comments = await github.rest.issues.listComments({
+            owner, repo, issue_number
+          });
+
+          const botComment = comments.data.find(c =>
+            c.body.includes('🐭 terra4mice Plan')
+          );
+
+          if (botComment) {
+            await github.rest.issues.updateComment({
+              owner, repo,
+              comment_id: botComment.id,
+              body
+            });
+          } else {
+            await github.rest.issues.createComment({
+              owner, repo, issue_number, body
+            });
+          }
+
+    - name: Upload Plan Artifact
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: terra4mice-plan
+        path: |
+          terra4mice-plan.json
+          terra4mice-comment.md
+        if-no-files-found: ignore
+
+    - name: Check exit code
+      shell: bash
+      run: |
+        exit ${{ steps.plan.outputs.exit_code }}

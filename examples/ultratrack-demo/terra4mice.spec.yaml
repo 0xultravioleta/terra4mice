@@ -1,0 +1,129 @@
+# Ultratrack Spec - Demo de terra4mice
+# Este es el spec de Ultratrack como ejemplo
+
+version: "1"
+
+resources:
+  # Data Sources - Los 7 orígenes de datos
+  datasource:
+    twitch:
+      attributes:
+        description: "Twitch chat, follows, subs integration"
+        api: "Twitch Helix API"
+        events: [chat_message, follow, subscription, bits]
+      depends_on: []
+
+    discord:
+      attributes:
+        description: "Discord server activity tracking"
+        api: "Discord.js"
+        events: [message, reaction, voice_join, role_change]
+      depends_on: []
+
+    telegram:
+      attributes:
+        description: "Telegram group/channel tracking"
+        api: "Telegram Bot API"
+        events: [message, join, leave, reaction]
+      depends_on: []
+
+    snapshot:
+      attributes:
+        description: "Snapshot DAO governance tracking"
+        api: "Snapshot GraphQL"
+        events: [proposal_created, vote_cast, proposal_ended]
+      depends_on: []
+
+    blockchain:
+      attributes:
+        description: "On-chain activity (wallets, transactions)"
+        networks: [ethereum, base, polygon]
+        events: [transfer, nft_mint, contract_interaction]
+      depends_on: []
+
+    events:
+      attributes:
+        description: "IRL events attendance tracking"
+        providers: [luma, eventbrite, custom]
+        events: [rsvp, checkin, feedback]
+      depends_on: []
+
+    twitter:
+      attributes:
+        description: "Twitter/X engagement tracking"
+        api: "Twitter API v2"
+        events: [mention, retweet, like, reply]
+      depends_on: []
+
+  # Unified API - El API que expone todo
+  api:
+    member_profile:
+      attributes:
+        description: "Get unified member profile"
+        endpoint: "GET /api/members/:id"
+      depends_on:
+        - datasource.twitch
+        - datasource.discord
+        - datasource.telegram
+        - datasource.blockchain
+
+    member_activity:
+      attributes:
+        description: "Get member activity timeline"
+        endpoint: "GET /api/members/:id/activity"
+      depends_on:
+        - datasource.twitch
+        - datasource.discord
+        - datasource.telegram
+
+    leaderboard:
+      attributes:
+        description: "Get community leaderboard"
+        endpoint: "GET /api/leaderboard"
+      depends_on:
+        - api.member_profile
+
+  # Mega Brain Queries
+  query:
+    cross_platform_engagement:
+      attributes:
+        description: "Query engagement across all platforms"
+        example: "Users active on Twitch AND Discord in last 7 days"
+      depends_on:
+        - datasource.twitch
+        - datasource.discord
+        - datasource.telegram
+
+    governance_participation:
+      attributes:
+        description: "Query governance participation vs social activity"
+      depends_on:
+        - datasource.snapshot
+        - datasource.discord
+
+    whale_tracking:
+      attributes:
+        description: "Track high-value on-chain members"
+      depends_on:
+        - datasource.blockchain
+        - api.member_profile
+
+  # Infrastructure
+  infra:
+    database:
+      attributes:
+        description: "TimescaleDB for time-series member data"
+        type: "timescaledb"
+      depends_on: []
+
+    cache:
+      attributes:
+        description: "Redis for real-time aggregations"
+        type: "redis"
+      depends_on: []
+
+    queue:
+      attributes:
+        description: "Message queue for event processing"
+        type: "rabbitmq"
+      depends_on: []

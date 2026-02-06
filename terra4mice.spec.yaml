@@ -1,0 +1,142 @@
+# terra4mice Spec - Meta-dogfooding (terra4mice tracking itself)
+# "The tool that tracks itself" 🐁🪞
+
+version: "1"
+
+resources:
+  # Core modules - the engine
+  module:
+    models:
+      attributes:
+        description: "Core data models: Resource, State, Spec, Plan, PlanAction"
+        entities: [Resource, State, Spec, PlanAction, Plan, ResourceStatus]
+      files:
+        - src/terra4mice/models.py
+      depends_on: []
+
+    spec_parser:
+      attributes:
+        description: "YAML spec loader and validator with circular dependency detection"
+        functions: [load_spec, parse_spec, validate_spec, create_example_spec]
+      files:
+        - src/terra4mice/spec_parser.py
+      depends_on:
+        - module.models
+
+    state_manager:
+      attributes:
+        description: "JSON state persistence with CRUD operations"
+        class: StateManager
+        functions: [load, save, list, show, mark_created, mark_partial, mark_broken, remove]
+      files:
+        - src/terra4mice/state_manager.py
+      depends_on:
+        - module.models
+
+    planner:
+      attributes:
+        description: "Diff engine: compare spec vs state, generate execution plan"
+        functions: [generate_plan, format_plan, check_dependencies]
+      files:
+        - src/terra4mice/planner.py
+      depends_on:
+        - module.models
+
+    inference:
+      attributes:
+        description: "Auto-detect resource status from codebase via file/pattern/AST analysis"
+        class: InferenceEngine
+        strategies:
+          - explicit_files
+          - pattern_matching
+          - test_detection
+          - ast_analysis_python
+          - content_analysis_solidity
+        languages: [python, javascript, typescript, solidity]
+      files:
+        - src/terra4mice/inference.py
+      depends_on:
+        - module.models
+
+    cli:
+      attributes:
+        description: "CLI interface with subcommands: init, plan, refresh, state, mark, apply"
+        commands: [init, plan, refresh, state_list, state_show, state_rm, mark, apply]
+      files:
+        - src/terra4mice/cli.py
+      depends_on:
+        - module.spec_parser
+        - module.state_manager
+        - module.planner
+        - module.inference
+
+  # Examples/demos
+  example:
+    demo_project:
+      attributes:
+        description: "Demo project with synthetic resources for testing inference"
+      files:
+        - examples/demo-project/terra4mice.spec.yaml
+        - examples/demo-project/terra4mice.state.json
+      depends_on:
+        - module.cli
+
+    ultratrack_demo:
+      attributes:
+        description: "Ultratrack spec-only demo showing missing features"
+      files:
+        - examples/ultratrack-demo/terra4mice.spec.yaml
+        - examples/ultratrack-demo/terra4mice.state.json
+      depends_on:
+        - module.cli
+
+  # Documentation
+  docs:
+    readme:
+      attributes:
+        description: "Project README with usage, examples, concepts"
+      files:
+        - README.md
+      depends_on:
+        - module.cli
+
+    spec_doc:
+      attributes:
+        description: "Detailed specification document"
+      files:
+        - SPEC.md
+      depends_on: []
+
+    plan_doc:
+      attributes:
+        description: "Development plan and roadmap"
+      files:
+        - PLAN.md
+      depends_on: []
+
+    progress:
+      attributes:
+        description: "Progress log toward graduation"
+      files:
+        - PROGRESS.md
+      depends_on: []
+
+  # Config
+  config:
+    pyproject:
+      attributes:
+        description: "Python package configuration"
+      files:
+        - pyproject.toml
+      depends_on: []
+
+  # Dogfooding specs (meta!)
+  dogfood:
+    seal_registry:
+      attributes:
+        description: "terra4mice spec for the SealRegistry Foundry project"
+        project: describe-net-contracts
+        convergence_target: 100%
+      depends_on:
+        - module.inference
+        - module.cli

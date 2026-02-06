@@ -1,0 +1,157 @@
+{
+  "version": "1",
+  "serial": 7,
+  "last_updated": "2026-01-27T18:48:29.748762",
+  "resources": [
+    {
+      "type": "feature",
+      "name": "login",
+      "status": "implemented",
+      "attributes": {
+        "inference_confidence": 1.0,
+        "inference_evidence": [
+          "Explicit files found: ['src/auth/login.py']",
+          "Pattern match files: ['src\\\\auth\\\\login.py', 'tests\\\\test_login.py']",
+          "Tests found: ['tests\\\\test_login.py']",
+          "AST analysis: 57% match"
+        ]
+      },
+      "depends_on": [],
+      "files": [
+        "src/auth/login.py",
+        "src\\auth\\login.py",
+        "tests\\test_login.py"
+      ],
+      "tests": [
+        "tests\\test_login.py"
+      ],
+      "created_at": "2026-01-27T18:48:29.748762",
+      "updated_at": "2026-01-27T18:48:29.748762"
+    },
+    {
+      "type": "feature",
+      "name": "logout",
+      "status": "partial",
+      "attributes": {
+        "inference_confidence": 0.39,
+        "inference_evidence": [
+          "Pattern match files: ['src\\\\auth\\\\login.py', 'tests\\\\test_login.py']",
+          "AST analysis: 30% match"
+        ]
+      },
+      "depends_on": [],
+      "files": [
+        "src\\auth\\login.py",
+        "tests\\test_login.py"
+      ],
+      "tests": [],
+      "created_at": "2026-01-27T18:48:29.748762",
+      "updated_at": "2026-01-27T18:48:29.748762"
+    },
+    {
+      "type": "feature",
+      "name": "notifications",
+      "status": "partial",
+      "attributes": {
+        "inference_confidence": 0.39,
+        "inference_evidence": [
+          "Pattern match files: ['src\\\\auth\\\\login.py', 'tests\\\\test_login.py']",
+          "AST analysis: 30% match"
+        ]
+      },
+      "depends_on": [],
+      "files": [
+        "src\\auth\\login.py",
+        "tests\\test_login.py"
+      ],
+      "tests": [],
+      "created_at": "2026-01-27T18:48:29.748762",
+      "updated_at": "2026-01-27T18:48:29.748762"
+    },
+    {
+      "type": "feature",
+      "name": "payment_processor",
+      "status": "implemented",
+      "attributes": {
+        "inference_confidence": 0.91,
+        "inference_evidence": [
+          "Explicit files found: ['src/payments/processor.py']",
+          "Pattern match files: ['src\\\\auth\\\\login.py', 'tests\\\\test_login.py']",
+          "AST analysis: 37% match"
+        ]
+      },
+      "depends_on": [],
+      "files": [
+        "src/payments/processor.py",
+        "src\\auth\\login.py",
+        "tests\\test_login.py"
+      ],
+      "tests": [],
+      "created_at": "2026-01-27T18:48:29.748762",
+      "updated_at": "2026-01-27T18:48:29.748762"
+    },
+    {
+      "type": "feature",
+      "name": "refund",
+      "status": "partial",
+      "attributes": {
+        "inference_confidence": 0.39,
+        "inference_evidence": [
+          "Pattern match files: ['src\\\\auth\\\\login.py', 'tests\\\\test_login.py']",
+          "AST analysis: 30% match"
+        ]
+      },
+      "depends_on": [],
+      "files": [
+        "src\\auth\\login.py",
+        "tests\\test_login.py"
+      ],
+      "tests": [],
+      "created_at": "2026-01-27T18:48:29.748762",
+      "updated_at": "2026-01-27T18:48:29.748762"
+    },
+    {
+      "type": "module",
+      "name": "auth",
+      "status": "partial",
+      "attributes": {
+        "inference_confidence": 0.36,
+        "inference_evidence": [
+          "Pattern match files: ['src\\\\auth\\\\login.py']",
+          "AST analysis: 20% match"
+        ]
+      },
+      "depends_on": [],
+      "files": [
+        "src\\auth\\login.py"
+      ],
+      "tests": [],
+      "created_at": "2026-01-27T18:48:29.748762",
+      "updated_at": "2026-01-27T18:48:29.748762"
+    },
+    {
+      "type": "module",
+      "name": "payments",
+      "status": "partial",
+      "attributes": {
+        "inference_confidence": 0.59,
+        "inference_evidence": [
+          "Pattern match files: ['src\\\\payments\\\\processor.py', 'src\\\\auth\\\\login.py', 'tests\\\\test_payments.py']",
+          "Tests found: ['tests\\\\test_payments.py']",
+          "AST analysis: 30% match"
+        ]
+      },
+      "depends_on": [],
+      "files": [
+        "src\\payments\\processor.py",
+        "src\\auth\\login.py",
+        "tests\\test_payments.py"
+      ],
+      "tests": [
+        "tests\\test_payments.py"
+      ],
+      "created_at": "2026-01-27T18:48:29.748762",
+      "updated_at": "2026-01-27T18:48:29.748762"
+    }
+  ]
+}

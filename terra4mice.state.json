@@ -1,0 +1,272 @@
+{
+  "version": "1",
+  "serial": 27,
+  "last_updated": "2026-02-03T03:05:51.764631",
+  "resources": [
+    {
+      "type": "config",
+      "name": "pyproject",
+      "status": "implemented",
+      "attributes": {
+        "inference_confidence": 0.75,
+        "inference_evidence": [
+          "Explicit files found: ['pyproject.toml']",
+          "AST analysis: 50% match"
+        ]
+      },
+      "depends_on": [],
+      "files": [
+        "pyproject.toml"
+      ],
+      "tests": [],
+      "created_at": "2026-02-03T03:05:51.764591",
+      "updated_at": "2026-02-03T03:05:51.764585"
+    },
+    {
+      "type": "docs",
+      "name": "plan_doc",
+      "status": "implemented",
+      "attributes": {
+        "inference_confidence": 0.75,
+        "inference_evidence": [
+          "Explicit files found: ['PLAN.md']",
+          "AST analysis: 50% match"
+        ]
+      },
+      "depends_on": [],
+      "files": [
+        "PLAN.md"
+      ],
+      "tests": [],
+      "created_at": "2026-02-03T03:05:51.764597",
+      "updated_at": "2026-02-03T03:05:51.764596"
+    },
+    {
+      "type": "docs",
+      "name": "progress",
+      "status": "implemented",
+      "attributes": {
+        "inference_confidence": 0.75,
+        "inference_evidence": [
+          "Explicit files found: ['PROGRESS.md']",
+          "AST analysis: 50% match"
+        ]
+      },
+      "depends_on": [],
+      "files": [
+        "PROGRESS.md"
+      ],
+      "tests": [],
+      "created_at": "2026-02-03T03:05:51.764601",
+      "updated_at": "2026-02-03T03:05:51.764600"
+    },
+    {
+      "type": "docs",
+      "name": "readme",
+      "status": "implemented",
+      "attributes": {
+        "inference_confidence": 0.75,
+        "inference_evidence": [
+          "Explicit files found: ['README.md']",
+          "AST analysis: 50% match"
+        ]
+      },
+      "depends_on": [],
+      "files": [
+        "README.md"
+      ],
+      "tests": [],
+      "created_at": "2026-02-03T03:05:51.764603",
+      "updated_at": "2026-02-03T03:05:51.764603"
+    },
+    {
+      "type": "docs",
+      "name": "spec_doc",
+      "status": "implemented",
+      "attributes": {
+        "inference_confidence": 0.75,
+        "inference_evidence": [
+          "Explicit files found: ['SPEC.md']",
+          "AST analysis: 50% match"
+        ]
+      },
+      "depends_on": [],
+      "files": [
+        "SPEC.md"
+      ],
+      "tests": [],
+      "created_at": "2026-02-03T03:05:51.764606",
+      "updated_at": "2026-02-03T03:05:51.764605"
+    },
+    {
+      "type": "dogfood",
+      "name": "seal_registry",
+      "status": "implemented",
+      "attributes": {},
+      "depends_on": [],
+      "files": [
+        "~/clawd/projects/describe-net-contracts/terra4mice.spec.yaml"
+      ],
+      "tests": [],
+      "created_at": "2026-02-03T03:05:51.764630",
+      "updated_at": "2026-02-03T03:05:51.764630"
+    },
+    {
+      "type": "example",
+      "name": "demo_project",
+      "status": "implemented",
+      "attributes": {
+        "inference_confidence": 0.75,
+        "inference_evidence": [
+          "Explicit files found: ['examples/demo-project/terra4mice.spec.yaml', 'examples/demo-project/terra4mice.state.json']",
+          "AST analysis: 50% match"
+        ]
+      },
+      "depends_on": [],
+      "files": [
+        "examples/demo-project/terra4mice.spec.yaml",
+        "examples/demo-project/terra4mice.state.json"
+      ],
+      "tests": [],
+      "created_at": "2026-02-03T03:05:51.764608",
+      "updated_at": "2026-02-03T03:05:51.764608"
+    },
+    {
+      "type": "example",
+      "name": "ultratrack_demo",
+      "status": "implemented",
+      "attributes": {
+        "inference_confidence": 0.75,
+        "inference_evidence": [
+          "Explicit files found: ['examples/ultratrack-demo/terra4mice.spec.yaml', 'examples/ultratrack-demo/terra4mice.state.json']",
+          "AST analysis: 50% match"
+        ]
+      },
+      "depends_on": [],
+      "files": [
+        "examples/ultratrack-demo/terra4mice.spec.yaml",
+        "examples/ultratrack-demo/terra4mice.state.json"
+      ],
+      "tests": [],
+      "created_at": "2026-02-03T03:05:51.764610",
+      "updated_at": "2026-02-03T03:05:51.764610"
+    },
+    {
+      "type": "module",
+      "name": "cli",
+      "status": "implemented",
+      "attributes": {
+        "inference_confidence": 0.96,
+        "inference_evidence": [
+          "Explicit files found: ['src/terra4mice/cli.py']",
+          "Pattern match files: ['src/terra4mice/cli.py']",
+          "AST analysis: 20% match"
+        ]
+      },
+      "depends_on": [],
+      "files": [
+        "src/terra4mice/cli.py"
+      ],
+      "tests": [],
+      "created_at": "2026-02-03T03:05:51.764612",
+      "updated_at": "2026-02-03T03:05:51.764612"
+    },
+    {
+      "type": "module",
+      "name": "inference",
+      "status": "implemented",
+      "attributes": {
+        "inference_confidence": 1.0,
+        "inference_evidence": [
+          "Explicit files found: ['src/terra4mice/inference.py']",
+          "Pattern match files: ['src/terra4mice/inference.py']",
+          "AST analysis: 50% match"
+        ]
+      },
+      "depends_on": [],
+      "files": [
+        "src/terra4mice/inference.py"
+      ],
+      "tests": [],
+      "created_at": "2026-02-03T03:05:51.764614",
+      "updated_at": "2026-02-03T03:05:51.764614"
+    },
+    {
+      "type": "module",
+      "name": "models",
+      "status": "implemented",
+      "attributes": {
+        "inference_confidence": 0.8999999999999999,
+        "inference_evidence": [
+          "Explicit files found: ['src/terra4mice/models.py']",
+          "Pattern match files: ['src/terra4mice/models.py']"
+        ]
+      },
+      "depends_on": [],
+      "files": [
+        "src/terra4mice/models.py"
+      ],
+      "tests": [],
+      "created_at": "2026-02-03T03:05:51.764616",
+      "updated_at": "2026-02-03T03:05:51.764616"
+    },
+    {
+      "type": "module",
+      "name": "planner",
+      "status": "implemented",
+      "attributes": {
+        "inference_confidence": 0.8999999999999999,
+        "inference_evidence": [
+          "Explicit files found: ['src/terra4mice/planner.py']",
+          "Pattern match files: ['src/terra4mice/planner.py']"
+        ]
+      },
+      "depends_on": [],
+      "files": [
+        "src/terra4mice/planner.py"
+      ],
+      "tests": [],
+      "created_at": "2026-02-03T03:05:51.764618",
+      "updated_at": "2026-02-03T03:05:51.764618"
+    },
+    {
+      "type": "module",
+      "name": "spec_parser",
+      "status": "implemented",
+      "attributes": {
+        "inference_confidence": 0.8999999999999999,
+        "inference_evidence": [
+          "Explicit files found: ['src/terra4mice/spec_parser.py']",
+          "Pattern match files: ['src/terra4mice/spec_parser.py']"
+        ]
+      },
+      "depends_on": [],
+      "files": [
+        "src/terra4mice/spec_parser.py"
+      ],
+      "tests": [],
+      "created_at": "2026-02-03T03:05:51.764621",
+      "updated_at": "2026-02-03T03:05:51.764620"
+    },
+    {
+      "type": "module",
+      "name": "state_manager",
+      "status": "implemented",
+      "attributes": {
+        "inference_confidence": 1.0,
+        "inference_evidence": [
+          "Explicit files found: ['src/terra4mice/state_manager.py']",
+          "Pattern match files: ['src/terra4mice/state_manager.py']",
+          "AST analysis: 50% match"
+        ]
+      },
+      "depends_on": [],
+      "files": [
+        "src/terra4mice/state_manager.py"
+      ],
+      "tests": [],
+      "created_at": "2026-02-03T03:05:51.764623",
+      "updated_at": "2026-02-03T03:05:51.764623"
+    }
+  ]
+}

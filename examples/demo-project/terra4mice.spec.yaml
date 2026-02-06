@@ -1,0 +1,57 @@
+# Demo Project Spec
+# Para probar la inferencia automática de terra4mice
+
+version: "1"
+
+resources:
+  # Features
+  feature:
+    # Implementadas (deberían detectarse)
+    login:
+      attributes:
+        description: "User login with email/password"
+      files:
+        - src/auth/login.py
+      depends_on: []
+
+    payment_processor:
+      attributes:
+        description: "Payment processing via x402"
+      files:
+        - src/payments/processor.py
+      depends_on: []
+
+    # NO implementadas (deberían quedar missing)
+    logout:
+      attributes:
+        description: "User logout and session invalidation"
+      depends_on:
+        - feature.login
+
+    refund:
+      attributes:
+        description: "Payment refunds"
+      depends_on:
+        - feature.payment_processor
+
+    notifications:
+      attributes:
+        description: "Email/push notifications"
+      depends_on: []
+
+  # Modules
+  module:
+    auth:
+      attributes:
+        description: "Authentication module"
+      depends_on: []
+
+    payments:
+      attributes:
+        description: "Payments module"
+      depends_on: []
+
+    analytics:
+      attributes:
+        description: "Analytics module"
+      depends_on: []

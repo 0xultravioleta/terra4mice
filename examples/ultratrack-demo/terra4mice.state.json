@@ -1,0 +1,72 @@
+{
+  "version": "1",
+  "serial": 15,
+  "last_updated": "2026-01-27T17:26:53.646541",
+  "resources": [
+    {
+      "type": "datasource",
+      "name": "discord",
+      "status": "partial",
+      "attributes": {
+        "partial_reason": "Missing voice_join event handler"
+      },
+      "depends_on": [],
+      "files": [],
+      "tests": [],
+      "created_at": "2026-01-27T17:26:53.646541",
+      "updated_at": "2026-01-27T17:26:53.646541"
+    },
+    {
+      "type": "datasource",
+      "name": "twitch",
+      "status": "implemented",
+      "attributes": {},
+      "depends_on": [],
+      "files": [
+        "src/sources/twitch.py"
+      ],
+      "tests": [],
+      "created_at": "2026-01-27T17:26:53.646541",
+      "updated_at": "2026-01-27T17:26:53.646541"
+    },
+    {
+      "type": "infra",
+      "name": "cache",
+      "status": "implemented",
+      "attributes": {},
+      "depends_on": [],
+      "files": [
+        "src/cache/redis.py"
+      ],
+      "tests": [],
+      "created_at": "2026-01-27T17:26:53.646541",
+      "updated_at": "2026-01-27T17:26:53.646541"
+    },
+    {
+      "type": "infra",
+      "name": "database",
+      "status": "implemented",
+      "attributes": {},
+      "depends_on": [],
+      "files": [
+        "src/db/timescale.py"
+      ],
+      "tests": [],
+      "created_at": "2026-01-27T17:26:53.646541",
+      "updated_at": "2026-01-27T17:26:53.646541"
+    },
+    {
+      "type": "infra",
+      "name": "queue",
+      "status": "implemented",
+      "attributes": {},
+      "depends_on": [],
+      "files": [
+        "src/queue/rabbitmq.py"
+      ],
+      "tests": [],
+      "created_at": "2026-01-27T17:26:53.646541",
+      "updated_at": "2026-01-27T17:26:53.646541"
+    }
+  ]
+}
