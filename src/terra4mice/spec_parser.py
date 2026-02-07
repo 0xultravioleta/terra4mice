@@ -28,6 +28,29 @@ from .models import Spec, Resource, ResourceStatus
 DEFAULT_SPEC_FILE = "terra4mice.spec.yaml"
 
 
+def load_spec_with_backend(path: Union[str, Path] = None):
+    """
+    Load spec and backend config from YAML.
+
+    Returns:
+        Tuple of (Spec, Optional[dict]) where the dict is the backend config
+    """
+    if path is None:
+        path = Path.cwd() / DEFAULT_SPEC_FILE
+    else:
+        path = Path(path)
+
+    if not path.exists():
+        raise FileNotFoundError(f"Spec file not found: {path}")
+
+    with open(path, 'r', encoding='utf-8') as f:
+        data = yaml.safe_load(f)
+
+    backend_config = data.get("backend")
+    spec = parse_spec(data)
+    return spec, backend_config
+
+
 def load_spec(path: Union[str, Path] = None) -> Spec:
     """
     Load spec from YAML file.

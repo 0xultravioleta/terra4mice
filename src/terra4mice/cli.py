@@ -3,17 +3,21 @@
 terra4mice CLI - State-Driven Development Framework
 
 Usage:
-    terra4mice init          Create spec and state files
-    terra4mice plan          Show what needs to be done
-    terra4mice refresh       Auto-detect resources from codebase
-    terra4mice state list    List all resources in state
-    terra4mice state show    Show details of a resource
-    terra4mice mark          Mark a resource as created/partial/broken
-    terra4mice mark --lock   Mark and lock (survives refresh)
-    terra4mice lock          Lock a resource (prevent refresh overwrite)
-    terra4mice unlock        Unlock a resource (allow refresh)
-    terra4mice apply         Interactive apply loop
-    terra4mice ci            Run refresh + plan in CI mode
+    terra4mice init                Create spec and state files
+    terra4mice init --migrate-state  Migrate local state to remote backend
+    terra4mice plan                Show what needs to be done
+    terra4mice refresh             Auto-detect resources from codebase
+    terra4mice state list          List all resources in state
+    terra4mice state show          Show details of a resource
+    terra4mice state pull          Download remote state to local file
+    terra4mice state push          Upload local state to remote backend
+    terra4mice mark                Mark a resource as created/partial/broken
+    terra4mice mark --lock         Mark and lock (survives refresh)
+    terra4mice lock                Lock a resource (prevent refresh overwrite)
+    terra4mice unlock              Unlock a resource (allow refresh)
+    terra4mice apply               Interactive apply loop
+    terra4mice ci                  Run refresh + plan in CI mode
+    terra4mice force-unlock ID     Force-release a stuck state lock
 """
 
 import sys
@@ -21,12 +25,34 @@ import argparse
 from pathlib import Path
 
 from . import __version__
-from .spec_parser import load_spec, validate_spec, create_example_spec, DEFAULT_SPEC_FILE
+from .spec_parser import load_spec, load_spec_with_backend, validate_spec, create_example_spec, DEFAULT_SPEC_FILE
 from .state_manager import StateManager, DEFAULT_STATE_FILE
+from .backends import create_backend, StateLockError, LocalBackend
 from .planner import generate_plan, format_plan, check_dependencies
 from .models import ResourceStatus
 from .inference import InferenceEngine, InferenceConfig, format_inference_report
 from .ci import format_plan_json, format_plan_markdown, strip_ansi
+
+
+def _create_state_manager(args) -> StateManager:
+    """Create StateManager with the correct backend.
+
+    Priority: --state flag > spec backend config > default local.
+    """
+    state_path = getattr(args, "state", None)
+    if state_path is not None:
+        return StateManager(path=state_path)
+
+    spec_path = getattr(args, "spec", None)
+    try:
+        _, backend_config = load_spec_with_backend(spec_path)
+        if backend_config:
+            backend = create_backend(backend_config)
+            return StateManager(backend=backend)
+    except (FileNotFoundError, Exception):
+        pass
+
+    return StateManager()
 
 
 def cmd_init(args):
@@ -88,7 +114,7 @@ def cmd_plan(args):
         return 1
 
     # Load state
-    sm = StateManager(args.state)
+    sm = _create_state_manager(args)
     sm.load()
 
     # Generate plan
@@ -154,7 +180,7 @@ def cmd_ci(args):
         return 1
 
     # Load state
-    sm = StateManager(args.state)
+    sm = _create_state_manager(args)
     sm.load()
 
     # Run refresh if root dir is available
@@ -212,7 +238,7 @@ def cmd_ci(args):
 
 def cmd_state_list(args):
     """List all resources in state."""
-    sm = StateManager(args.state)
+    sm = _create_state_manager(args)
     sm.load()
 
     resources = sm.list(args.type)
@@ -250,7 +276,7 @@ def cmd_state_list(args):
 
 def cmd_state_show(args):
     """Show details of a specific resource."""
-    sm = StateManager(args.state)
+    sm = _create_state_manager(args)
     sm.load()
 
     resource = sm.show(args.address)
@@ -297,84 +323,93 @@ def cmd_state_show(args):
 
 def cmd_state_rm(args):
     """Remove a resource from state."""
-    sm = StateManager(args.state)
-    sm.load()
+    sm = _create_state_manager(args)
+    try:
+        with sm:
+            resource = sm.remove(args.address)
 
-    resource = sm.remove(args.address)
+            if resource is None:
+                print(f"Resource not found: {args.address}")
+                return 1
 
-    if resource is None:
-        print(f"Resource not found: {args.address}")
+            sm.save()
+            print(f"Removed: {args.address}")
+            return 0
+    except StateLockError as e:
+        print(f"Error: {e}")
         return 1
-
-    sm.save()
-    print(f"Removed: {args.address}")
-
-    return 0
 
 
 def cmd_mark(args):
     """Mark a resource status."""
-    sm = StateManager(args.state)
-    sm.load()
+    sm = _create_state_manager(args)
+    try:
+        with sm:
+            address = args.address
+            status = args.status or "implemented"
+            lock = getattr(args, 'lock', False)
 
-    address = args.address
-    status = args.status or "implemented"
-    lock = getattr(args, 'lock', False)
+            files = args.files.split(",") if args.files else []
+            tests = args.tests.split(",") if args.tests else []
 
-    # Parse files if provided
-    files = args.files.split(",") if args.files else []
-    tests = args.tests.split(",") if args.tests else []
+            if status == "implemented":
+                resource = sm.mark_created(address, files=files, tests=tests, lock=lock)
+            elif status == "partial":
+                resource = sm.mark_partial(address, reason=args.reason or "", lock=lock)
+            elif status == "broken":
+                resource = sm.mark_broken(address, reason=args.reason or "", lock=lock)
+            else:
+                print(f"Unknown status: {status}")
+                return 1
 
-    if status == "implemented":
-        resource = sm.mark_created(address, files=files, tests=tests, lock=lock)
-    elif status == "partial":
-        resource = sm.mark_partial(address, reason=args.reason or "", lock=lock)
-    elif status == "broken":
-        resource = sm.mark_broken(address, reason=args.reason or "", lock=lock)
-    else:
-        print(f"Unknown status: {status}")
+            sm.save()
+
+            lock_indicator = " (locked)" if resource.locked else ""
+            print(f"Marked {resource.address} as {resource.status.value}{lock_indicator}")
+            return 0
+    except StateLockError as e:
+        print(f"Error: {e}")
         return 1
-
-    sm.save()
-
-    lock_indicator = " (locked)" if resource.locked else ""
-    print(f"Marked {resource.address} as {resource.status.value}{lock_indicator}")
-
-    return 0
 
 
 def cmd_lock(args):
     """Lock a resource to prevent refresh from overwriting it."""
-    sm = StateManager(args.state)
-    sm.load()
+    sm = _create_state_manager(args)
+    try:
+        with sm:
+            address = args.address
+            resource = sm.mark_locked(address, locked=True)
 
-    address = args.address
-    resource = sm.mark_locked(address, locked=True)
+            if resource is None:
+                print(f"Resource not found: {address}")
+                return 1
 
-    if resource is None:
-        print(f"Resource not found: {address}")
+            sm.save()
+            print(f"Locked: {resource.address} ({resource.status.value})")
+            return 0
+    except StateLockError as e:
+        print(f"Error: {e}")
         return 1
-
-    sm.save()
-    print(f"Locked: {resource.address} ({resource.status.value})")
-    return 0
 
 
 def cmd_unlock(args):
     """Unlock a resource so refresh can update it."""
-    sm = StateManager(args.state)
-    sm.load()
+    sm = _create_state_manager(args)
+    try:
+        with sm:
+            address = args.address
+            resource = sm.mark_locked(address, locked=False)
 
-    address = args.address
-    resource = sm.mark_locked(address, locked=False)
+            if resource is None:
+                print(f"Resource not found: {address}")
+                return 1
 
-    if resource is None:
-        print(f"Resource not found: {address}")
+            sm.save()
+            print(f"Unlocked: {resource.address} ({resource.status.value})")
+            return 0
+    except StateLockError as e:
+        print(f"Error: {e}")
         return 1
-
-    sm.save()
-    print(f"Unlocked: {resource.address} ({resource.status.value})")
-    return 0
 
 
 def cmd_refresh(args):
@@ -392,61 +427,65 @@ def cmd_refresh(args):
         return 1
 
     # Load existing state
-    sm = StateManager(args.state)
-    sm.load()
+    sm = _create_state_manager(args)
 
-    # Configure inference
-    config = InferenceConfig()
-    config.root_dir = Path(args.root) if args.root else Path.cwd()
-    config.parallelism = getattr(args, 'parallelism', 0)
+    try:
+        with sm:
+            # Configure inference
+            config = InferenceConfig()
+            config.root_dir = Path(args.root) if args.root else Path.cwd()
+            config.parallelism = getattr(args, 'parallelism', 0)
 
-    if args.source_dirs:
-        config.source_dirs = args.source_dirs.split(",")
+            if args.source_dirs:
+                config.source_dirs = args.source_dirs.split(",")
 
-    # Run inference
-    import sys as _sys
+            # Run inference
+            import sys as _sys
 
-    def _progress(current, total, resource):
-        _sys.stderr.write(f"\rScanning... [{current}/{total}] {resource.address:<40}")
-        _sys.stderr.flush()
+            def _progress(current, total, resource):
+                _sys.stderr.write(f"\rScanning... [{current}/{total}] {resource.address:<40}")
+                _sys.stderr.flush()
 
-    engine = InferenceEngine(config)
-    workers = engine._effective_parallelism()
-    par_info = f" (parallelism={workers})" if workers > 1 else ""
-    print(f"Scanning {config.root_dir} for resources...{par_info}", file=_sys.stderr)
+            engine = InferenceEngine(config)
+            workers = engine._effective_parallelism()
+            par_info = f" (parallelism={workers})" if workers > 1 else ""
+            print(f"Scanning {config.root_dir} for resources...{par_info}", file=_sys.stderr)
 
-    results = engine.infer_all(spec, progress_callback=_progress)
-    _sys.stderr.write("\r" + " " * 70 + "\r")
-    _sys.stderr.flush()
+            results = engine.infer_all(spec, progress_callback=_progress)
+            _sys.stderr.write("\r" + " " * 70 + "\r")
+            _sys.stderr.flush()
 
-    # Show report
-    print(format_inference_report(results))
+            # Show report
+            print(format_inference_report(results))
 
-    # Apply to state if not dry-run
-    if not args.dry_run:
-        updated = engine.apply_to_state(
-            results,
-            sm.state,
-            only_missing=not args.force
-        )
+            # Apply to state if not dry-run
+            if not args.dry_run:
+                updated = engine.apply_to_state(
+                    results,
+                    sm.state,
+                    only_missing=not args.force
+                )
 
-        if updated:
-            sm.save()
-            print(f"\nUpdated {len(updated)} resources in state:")
-            for addr in updated:
-                print(f"  - {addr}")
-        else:
-            print("\nNo changes to state.")
+                if updated:
+                    sm.save()
+                    print(f"\nUpdated {len(updated)} resources in state:")
+                    for addr in updated:
+                        print(f"  - {addr}")
+                else:
+                    print("\nNo changes to state.")
 
-        # Show updated plan
-        if args.show_plan:
-            print()
-            plan = generate_plan(spec, sm.state)
-            print(format_plan(plan))
-    else:
-        print("\n(Dry run - state not modified)")
+                # Show updated plan
+                if args.show_plan:
+                    print()
+                    plan = generate_plan(spec, sm.state)
+                    print(format_plan(plan))
+            else:
+                print("\n(Dry run - state not modified)")
 
-    return 0
+            return 0
+    except StateLockError as e:
+        print(f"Error: {e}")
+        return 1
 
 
 def cmd_apply(args):
@@ -457,7 +496,7 @@ def cmd_apply(args):
         print(f"Error: {e}")
         return 1
 
-    sm = StateManager(args.state)
+    sm = _create_state_manager(args)
     sm.load()
 
     plan = generate_plan(spec, sm.state)
@@ -537,7 +576,7 @@ def cmd_diff(args):
 
     # Load state B (new / current)
     try:
-        sm = StateManager(state_b_path)
+        sm = StateManager(path=state_b_path)
         sm.load()
         data_b_resources = {}
         for r in sm.state.list():
@@ -641,6 +680,106 @@ def cmd_diff(args):
     return 0
 
 
+def cmd_state_pull(args):
+    """Download remote state to a local file."""
+    sm = _create_state_manager(args)
+    sm.load()
+
+    output = getattr(args, "output", None) or "terra4mice.state.json"
+    data = sm._serialize_state(sm.state)
+    import json as _json
+    Path(output).write_text(_json.dumps(data, indent=2, default=str), encoding="utf-8")
+    print(f"State pulled to: {output}")
+    print(f"  Backend: {sm.backend.backend_type}")
+    print(f"  Resources: {len(sm.state.list())}")
+    print(f"  Serial: {sm.state.serial}")
+    return 0
+
+
+def cmd_state_push(args):
+    """Upload a local state file to the remote backend."""
+    sm = _create_state_manager(args)
+
+    input_file = getattr(args, "input", None) or "terra4mice.state.json"
+    input_path = Path(input_file)
+    if not input_path.exists():
+        print(f"Error: file not found: {input_file}")
+        return 1
+
+    import json as _json
+    data = _json.loads(input_path.read_text(encoding="utf-8"))
+    sm.state = sm._parse_state(data)
+
+    try:
+        with sm:
+            sm.save()
+            print(f"State pushed from: {input_file}")
+            print(f"  Backend: {sm.backend.backend_type}")
+            print(f"  Resources: {len(sm.state.list())}")
+            print(f"  Serial: {sm.state.serial}")
+            return 0
+    except StateLockError as e:
+        print(f"Error: {e}")
+        return 1
+
+
+def cmd_force_unlock(args):
+    """Force-release a stuck state lock."""
+    sm = _create_state_manager(args)
+
+    if not sm.backend.supports_locking:
+        print("Backend does not support locking.")
+        return 1
+
+    lock_id = args.lock_id
+    sm.backend.force_unlock(lock_id)
+    print(f"Lock forcefully released: {lock_id}")
+    print("WARNING: Releasing a lock held by another process may cause state corruption.")
+    return 0
+
+
+def cmd_migrate_state(args):
+    """Migrate state from local to remote backend (or vice versa)."""
+    # Load from local
+    local_path = Path(args.state) if args.state else Path.cwd() / DEFAULT_STATE_FILE
+    if not local_path.exists():
+        print(f"Error: local state file not found: {local_path}")
+        return 1
+
+    local_sm = StateManager(path=local_path)
+    local_sm.load()
+
+    # Load spec to get backend config
+    spec_path = getattr(args, "spec", None)
+    try:
+        _, backend_config = load_spec_with_backend(spec_path)
+    except FileNotFoundError as e:
+        print(f"Error: {e}")
+        return 1
+
+    if not backend_config:
+        print("Error: no backend configured in spec. Add a backend: section first.")
+        return 1
+
+    backend = create_backend(backend_config)
+    remote_sm = StateManager(backend=backend)
+
+    try:
+        with remote_sm:
+            remote_sm.state = local_sm.state
+            remote_sm.save()
+            print(f"State migrated to {backend.backend_type} backend.")
+            print(f"  Resources: {len(local_sm.state.list())}")
+            print(f"  Serial: {local_sm.state.serial}")
+            print()
+            print("You can now remove the local state file if desired:")
+            print(f"  del {local_path}" if sys.platform == "win32" else f"  rm {local_path}")
+            return 0
+    except StateLockError as e:
+        print(f"Error: {e}")
+        return 1
+
+
 def main():
     """Entry point for terra4mice CLI."""
     parser = argparse.ArgumentParser(
@@ -657,6 +796,10 @@ def main():
     # init
     init_parser = subparsers.add_parser("init", help="Initialize terra4mice")
     init_parser.add_argument("--force", action="store_true", help="Overwrite existing files")
+    init_parser.add_argument("--migrate-state", action="store_true",
+                            help="Migrate local state to remote backend configured in spec")
+    init_parser.add_argument("--spec", default=None, help="Path to spec file")
+    init_parser.add_argument("--state", default=None, help="Path to state file")
 
     # plan
     plan_parser = subparsers.add_parser("plan", help="Show execution plan")
@@ -711,6 +854,20 @@ def main():
     state_rm.add_argument("address", help="Resource address (type.name)")
     state_rm.add_argument("--state", default=None, help="Path to state file")
 
+    # state pull
+    state_pull = state_subparsers.add_parser("pull", help="Download remote state to local file")
+    state_pull.add_argument("--spec", default=None, help="Path to spec file")
+    state_pull.add_argument("--state", default=None, help="Path to state file")
+    state_pull.add_argument("-o", "--output", default=None,
+                            help="Output file (default: terra4mice.state.json)")
+
+    # state push
+    state_push = state_subparsers.add_parser("push", help="Upload local state to remote backend")
+    state_push.add_argument("--spec", default=None, help="Path to spec file")
+    state_push.add_argument("--state", default=None, help="Path to state file")
+    state_push.add_argument("-i", "--input", default=None,
+                            help="Input file (default: terra4mice.state.json)")
+
     # mark
     mark_parser = subparsers.add_parser("mark", help="Mark resource status")
     mark_parser.add_argument("address", help="Resource address (type.name)")
@@ -762,6 +919,14 @@ def main():
                             help="Path to new state file (defaults to current)")
     diff_parser.add_argument("--state", default=None, help="Path to state file")
 
+    # force-unlock
+    force_unlock_parser = subparsers.add_parser(
+        "force-unlock", help="Force-release a stuck state lock"
+    )
+    force_unlock_parser.add_argument("lock_id", help="Lock ID to force-release")
+    force_unlock_parser.add_argument("--spec", default=None, help="Path to spec file")
+    force_unlock_parser.add_argument("--state", default=None, help="Path to state file")
+
     args = parser.parse_args()
 
     if args.command is None:
@@ -769,6 +934,8 @@ def main():
         return 0
 
     if args.command == "init":
+        if getattr(args, "migrate_state", False):
+            return cmd_migrate_state(args)
         return cmd_init(args)
     elif args.command == "plan":
         return cmd_plan(args)
@@ -781,6 +948,10 @@ def main():
             return cmd_state_show(args)
         elif args.state_command == "rm":
             return cmd_state_rm(args)
+        elif args.state_command == "pull":
+            return cmd_state_pull(args)
+        elif args.state_command == "push":
+            return cmd_state_push(args)
         else:
             state_parser.print_help()
             return 0
@@ -796,6 +967,8 @@ def main():
         return cmd_refresh(args)
     elif args.command == "diff":
         return cmd_diff(args)
+    elif args.command == "force-unlock":
+        return cmd_force_unlock(args)
 
     return 0
 

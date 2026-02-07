@@ -48,8 +48,11 @@ ast = [
     "tree-sitter>=0.23.0",
     "tree-sitter-language-pack>=0.4.0",
 ]
+remote = [
+    "boto3>=1.26.0",
+]
 all = [
-    "terra4mice[dev,ast]",
+    "terra4mice[dev,ast,remote]",
 ]
 
 [project.scripts]

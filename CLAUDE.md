@@ -17,6 +17,9 @@ pip install -e ".[dev]"
 # Install with tree-sitter AST analysis (optional, Python >=3.10)
 pip install -e ".[ast]"
 
+# Install with remote state backend (S3 + DynamoDB locking)
+pip install -e ".[remote]"
+
 # Install everything
 pip install -e ".[all]"
 
@@ -26,10 +29,12 @@ pytest -p no:pytest_ethereum
 # Run a single test file
 pytest tests/test_ci.py -p no:pytest_ethereum
 pytest tests/test_analyzers.py -p no:pytest_ethereum
+pytest tests/test_backends.py -p no:pytest_ethereum
 
 # Run a specific test class or method
 pytest tests/test_ci.py::TestConvergence -p no:pytest_ethereum
 pytest tests/test_analyzers.py::TestScoreAgainstSpec -p no:pytest_ethereum
+pytest tests/test_backends.py::TestS3Backend -p no:pytest_ethereum
 
 # Run with coverage
 pytest tests/ -p no:pytest_ethereum --cov=terra4mice --cov-report=term-missing
@@ -54,19 +59,22 @@ The codebase follows Terraform's architecture pattern with a clear pipeline:
 
 ```
 Spec Parser → State Manager → Planner → CLI/CI Output
-                  ↑
-            Inference Engine
-                  ↑
-            AST Analyzers (tree-sitter, optional)
+                  ↑    ↑
+            Inference   Backend (Local / S3+DynamoDB)
+              Engine
+                ↑
+          AST Analyzers (tree-sitter, optional)
 ```
 
 ### Core modules (`src/terra4mice/`)
 
 - **`models.py`** - Data models: `Resource`, `State`, `Spec`, `Plan`, `PlanAction`, `ResourceStatus` enum. Resources are addressed as `type.name` (e.g., `feature.auth_login`). ResourceStatus values: `missing`, `partial`, `implemented`, `broken`, `deprecated`.
 
-- **`spec_parser.py`** - Loads `terra4mice.spec.yaml` (YAML) into `Spec` objects. Validates circular and missing dependencies. Resources are grouped by type (`feature`, `module`, `endpoint`, etc.) in the YAML hierarchy.
+- **`backends.py`** - Pluggable state storage backends. `StateBackend` ABC with `read()`, `write()`, `exists()`, `lock()`, `unlock()`, `force_unlock()`. Implementations: `LocalBackend` (filesystem, no locking), `S3Backend` (S3 storage + DynamoDB locking via conditional writes). `LockInfo` dataclass tracks lock holder/timestamp. `StateLockError` raised on lock conflicts. `create_backend()` factory: priority is explicit path > spec config > default local. boto3 is a lazy import (optional dep: `pip install terra4mice[remote]`).
 
-- **`state_manager.py`** - Manages `terra4mice.state.json` persistence. `StateManager` class handles CRUD: `mark_created()`, `mark_partial()`, `mark_broken()`, `remove()`. State serial increments on each mutation.
+- **`spec_parser.py`** - Loads `terra4mice.spec.yaml` (YAML) into `Spec` objects. Validates circular and missing dependencies. Resources are grouped by type (`feature`, `module`, `endpoint`, etc.) in the YAML hierarchy. `load_spec_with_backend()` extracts both Spec and optional backend config from YAML.
+
+- **`state_manager.py`** - Manages state persistence via `StateBackend`. `StateManager` class accepts either `path=` (backward compat, uses `LocalBackend`) or `backend=` (any `StateBackend`). Handles CRUD: `mark_created()`, `mark_partial()`, `mark_broken()`, `remove()`. State serial increments on each mutation. Context manager (`with sm:`) auto-acquires/releases locks on backends that support locking.
 
 - **`planner.py`** - Diffs spec vs state to produce `Plan` with actions (`create`, `update`, `delete`, `no-op`). `check_dependencies()` verifies dependency graph satisfaction.
 
@@ -76,7 +84,7 @@ Spec Parser → State Manager → Planner → CLI/CI Output
 
 - **`ci.py`** - CI/CD output formatters: JSON (machine-readable), Markdown (PR comments with status table), and Shields.io badge JSON. Contains `_compute_convergence()` which scores: implemented=100%, partial=50%, missing/broken=0%.
 
-- **`cli.py`** - argparse-based CLI entry point. Subcommands: `init`, `plan`, `refresh`, `state list/show/rm`, `mark`, `apply`, `ci`. Entry point defined in `pyproject.toml` as `terra4mice.cli:main`.
+- **`cli.py`** - argparse-based CLI entry point. Subcommands: `init`, `plan`, `refresh`, `state list/show/rm/pull/push`, `mark`, `lock`, `unlock`, `apply`, `ci`, `diff`, `force-unlock`. `_create_state_manager()` helper resolves backend: `--state` flag > spec backend config > default local. Mutating commands use `with sm:` context manager for auto-locking. `init --migrate-state` migrates local state to remote backend. Entry point defined in `pyproject.toml` as `terra4mice.cli:main`.
 
 ### Key design decisions
 
@@ -86,6 +94,9 @@ Spec Parser → State Manager → Planner → CLI/CI Output
 - **Inference is non-destructive by default** - `only_missing=True` means existing state entries aren't overwritten unless `--force`
 - **tree-sitter is optional** - Degrades gracefully: tree-sitter → stdlib ast → regex → size heuristic
 - **tree-sitter API** - Uses `Query(language, pattern)` + `QueryCursor(query)` + `cursor.captures(node)` which returns `dict[str, list[Node]]`. Do NOT use deprecated `language.query()`.
+- **Pluggable backends** - `StateBackend` ABC allows local or S3 storage. Backend selection: `--state` flag > spec `backend:` config > default local. Zero breaking changes: local is default.
+- **boto3 is optional** - Lazy imported only when S3Backend is instantiated. Install with `pip install terra4mice[remote]`.
+- **DynamoDB locking** - Uses `ConditionExpression="attribute_not_exists(LockID)"` for atomic lock acquisition. Lock table is optional; without it, S3 backend works but without locking (with warning).
 
 ### GitHub Action
 
@@ -97,6 +108,7 @@ Tests live in `tests/`:
 
 - **`test_ci.py`** - CI output formats, convergence calculation, badge generation, ANSI stripping, and CLI integration via `sys.argv` manipulation + stdout capture. (49 tests)
 - **`test_analyzers.py`** - Tree-sitter analysis per language, `score_against_spec`, file dispatch, fallback behavior, TypeScript regex fallback. Tests use `@pytest.mark.skipif(not HAS_TREE_SITTER)` so they pass with or without tree-sitter installed. (48 tests)
+- **`test_backends.py`** - Backend abstraction: LockInfo serialization, StateLockError, LocalBackend, S3Backend (mocked boto3), create_backend factory, StateManager with backend/context manager, CLI state pull/push/force-unlock/migrate integration. No AWS credentials needed. (60 tests)
 
 Test fixtures use helper functions `_make_resource()`, `_make_spec()`, `_make_state()` to build scenarios. CLI integration tests write temp spec/state files and invoke `main()` directly.
 
@@ -125,12 +137,31 @@ module:
       strategies: [explicit_files]     # substring match in functions+classes
 ```
 
+## Backend Configuration
+
+The spec YAML supports an optional `backend:` section for remote state:
+
+```yaml
+backend:
+  type: s3           # "local" (default) or "s3"
+  config:
+    bucket: my-bucket
+    key: path/to/terra4mice.state.json
+    region: us-east-1
+    lock_table: terra4mice-locks   # DynamoDB table, optional
+    profile: aws-profile           # AWS named profile, optional
+    encrypt: true                  # S3 SSE, optional
+```
+
+Backend resolution priority: `--state` CLI flag > spec `backend:` config > default local file.
+
 ## Phases & Roadmap
 
 - **Phase 1** (MVP CLI) - DONE: init, plan, refresh, state, mark, apply, ci
 - **Phase 2** (tree-sitter AST) - DONE: analyzers.py, multi-language, spec attribute scoring
 - **Phase 3** (Multi-AI Context Tracking) - SPEC DECLARED: context_registry, context_cli, context_export
 - **Phase 4** (CI/CD Integration) - DONE: GitHub Action, PR comments, badges
+- **Phase 4.5** (Remote State) - DONE: backends.py, S3+DynamoDB locking, state pull/push, force-unlock, migrate-state
 - **Phase 5** (Apply Runner) - PLANNED
 - **Phase 6** (Ecosystem Rollout) - PLANNED
 

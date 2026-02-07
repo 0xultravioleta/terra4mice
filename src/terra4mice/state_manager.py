@@ -16,6 +16,7 @@ from datetime import datetime
 from typing import Union, Optional, List
 
 from .models import State, Resource, ResourceStatus, SymbolStatus
+from .backends import StateBackend, LocalBackend, StateLockError
 
 
 DEFAULT_STATE_FILE = "terra4mice.state.json"
@@ -30,46 +31,74 @@ class StateManager:
         sm.load()
         sm.mark_created("feature.auth_login", files=["src/auth.py"])
         sm.save()
+
+    With remote backend + locking:
+        sm = StateManager(backend=s3_backend)
+        with sm:  # auto-lock + load
+            sm.mark_created("feature.auth_login", files=["src/auth.py"])
+            sm.save()
+        # auto-unlock on exit
     """
 
-    def __init__(self, path: Union[str, Path] = None):
+    def __init__(self, path: Union[str, Path] = None, backend: StateBackend = None):
         """
         Initialize state manager.
 
         Args:
             path: Path to state file. Defaults to terra4mice.state.json
+            backend: StateBackend instance. If provided, path is ignored.
         """
-        if path is None:
-            path = Path.cwd() / DEFAULT_STATE_FILE
+        if backend is not None:
+            self.backend = backend
+        elif path is not None:
+            self.backend = LocalBackend(Path(path))
         else:
-            path = Path(path)
+            self.backend = LocalBackend(Path.cwd() / DEFAULT_STATE_FILE)
 
-        self.path = path
+        # Keep self.path for backward compat (used by tests and other code)
+        if isinstance(self.backend, LocalBackend):
+            self.path = self.backend.path
+        else:
+            self.path = None
+
         self.state = State()
+        self._lock_info = None
 
     def load(self) -> State:
         """
-        Load state from file.
+        Load state from backend.
 
         Returns:
-            State object (empty if file doesn't exist)
+            State object (empty if state doesn't exist)
         """
-        if not self.path.exists():
+        raw = self.backend.read()
+        if raw is None:
             self.state = State()
             return self.state
 
-        with open(self.path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-
+        data = json.loads(raw)
         self.state = self._parse_state(data)
         return self.state
 
     def save(self) -> None:
-        """Save state to file."""
+        """Save state to backend."""
         data = self._serialize_state(self.state)
+        raw = json.dumps(data, indent=2, default=str).encode("utf-8")
+        self.backend.write(raw)
 
-        with open(self.path, 'w', encoding='utf-8') as f:
-            json.dump(data, f, indent=2, default=str)
+    def __enter__(self):
+        """Context manager: acquire lock and load state."""
+        if self.backend.supports_locking:
+            self._lock_info = self.backend.lock()
+        self.load()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager: release lock."""
+        if self._lock_info:
+            self.backend.unlock(self._lock_info.lock_id)
+            self._lock_info = None
+        return False
 
     def list(self, type_filter: Optional[str] = None) -> List[Resource]:
         """

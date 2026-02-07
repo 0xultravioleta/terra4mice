@@ -40,6 +40,9 @@ pip install terra4mice
 # Con analisis AST profundo (opcional, Python >=3.10)
 pip install terra4mice[ast]
 
+# Con remote state backend (S3 + DynamoDB locking)
+pip install terra4mice[remote]
+
 # Inicializar en tu proyecto
 cd my-project
 terra4mice init
@@ -186,6 +189,41 @@ Files that implement this: src/auth.py, src/routes/login.py
 Marked as implemented: feature.auth_login
 ```
 
+### `terra4mice state pull / push`
+
+Sincronizar state entre backends local y remoto:
+
+```bash
+# Descargar state remoto a archivo local
+terra4mice state pull -o local_backup.json
+
+# Subir state local al backend remoto
+terra4mice state push -i local_backup.json
+```
+
+### `terra4mice force-unlock <lock-id>`
+
+Liberar forzosamente un lock atascado (cuando un proceso crashea a mitad de operacion):
+
+```bash
+terra4mice force-unlock a1b2c3d4-5678-9abc-def0-123456789abc
+# Lock forcefully released: a1b2c3d4-...
+# WARNING: Releasing a lock held by another process may cause state corruption.
+```
+
+### `terra4mice init --migrate-state`
+
+Migrar state local a un backend remoto configurado en el spec:
+
+```bash
+# 1. Agregar seccion backend: al terra4mice.spec.yaml
+# 2. Ejecutar migracion
+terra4mice init --migrate-state
+# State migrated to s3 backend.
+#   Resources: 12
+#   Serial: 45
+```
+
 ### `terra4mice ci`
 
 Output para CI/CD pipelines:
@@ -275,6 +313,44 @@ Lenguajes soportados: Python, TypeScript/TSX, JavaScript, Solidity.
 }
 ```
 
+## Remote State Backend
+
+Almacena el state en S3 con locking opcional via DynamoDB para colaboracion en equipo. Agrega una seccion `backend:` al spec:
+
+```yaml
+# terra4mice.spec.yaml
+version: "1"
+
+backend:
+  type: s3
+  config:
+    bucket: my-terra4mice-state
+    key: projects/myapp/terra4mice.state.json
+    region: us-east-1
+    lock_table: terra4mice-locks    # tabla DynamoDB (opcional)
+    profile: my-aws-profile         # perfil AWS (opcional)
+    encrypt: true                   # S3 SSE (opcional)
+
+resources:
+  # ... tu spec sin cambios ...
+```
+
+Sin `backend:` o con `type: local`, el comportamiento no cambia (archivo local).
+
+### Setup de la tabla DynamoDB para locking
+
+```bash
+aws dynamodb create-table \
+  --table-name terra4mice-locks \
+  --attribute-definitions AttributeName=LockID,AttributeType=S \
+  --key-schema AttributeName=LockID,KeyType=HASH \
+  --billing-mode PAY_PER_REQUEST
+```
+
+### Como funciona el locking
+
+Cuando se configura un `backend` con `lock_table`, los comandos que escriben state (`refresh`, `mark`, `lock`, `unlock`, `state rm`, `state push`) adquieren automaticamente un lock en DynamoDB antes de escribir. Si otro proceso tiene el lock, el comando falla con un error descriptivo mostrando quien lo tiene y cuando fue adquirido.
+
 ## CI/CD Integration
 
 ```yaml
@@ -304,6 +380,7 @@ jobs:
 | 2 - tree-sitter AST | DONE | Multi-language deep analysis, spec attribute verification |
 | 3 - Multi-AI Contexts | PLANNED | Track which AI (Claude, Codex, Kimi) has context on what |
 | 4 - CI/CD Integration | DONE | GitHub Action, PR comments, convergence badges |
+| 4.5 - Remote State | DONE | S3 backend, DynamoDB locking, state pull/push, migrate-state |
 | 5 - Apply Runner | PLANNED | Interactive apply loop, agent integration |
 | 6 - Ecosystem Rollout | PLANNED | Deploy across Ultravioleta DAO projects |
 
