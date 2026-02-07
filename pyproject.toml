@@ -56,10 +56,10 @@ all = [
 terra4mice = "terra4mice.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/ultravioletadao/terra4mice"
-Documentation = "https://github.com/ultravioletadao/terra4mice#readme"
-Repository = "https://github.com/ultravioletadao/terra4mice"
-Issues = "https://github.com/ultravioletadao/terra4mice/issues"
+Homepage = "https://github.com/0xultravioleta/terra4mice"
+Documentation = "https://github.com/0xultravioleta/terra4mice#readme"
+Repository = "https://github.com/0xultravioleta/terra4mice"
+Issues = "https://github.com/0xultravioleta/terra4mice/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]
