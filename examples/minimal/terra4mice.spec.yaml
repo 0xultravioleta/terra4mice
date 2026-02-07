@@ -1,0 +1,19 @@
+# Minimal terra4mice spec - simplest possible starting point
+# Run: t4m init && t4m plan
+
+version: "1"
+
+resources:
+  feature:
+    my_first_feature:
+      attributes:
+        description: "Replace this with your feature description"
+      files:
+        - src/my_feature.py  # Update with your actual file path
+      depends_on: []
+
+    my_second_feature:
+      attributes:
+        description: "A feature that depends on the first"
+      depends_on:
+        - feature.my_first_feature

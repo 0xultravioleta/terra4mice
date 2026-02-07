@@ -1,0 +1,314 @@
+# ============================================================================
+# terra4mice Starter Template
+# ============================================================================
+# Copy this file to your project root and customize for your needs.
+#
+# Quick Start:
+#   1. Copy this file to your project: cp terra4mice.spec.yaml /path/to/project/
+#   2. Edit resources to match your project structure
+#   3. Run: t4m init        (creates state file)
+#   4. Run: t4m refresh     (auto-detect implemented resources)
+#   5. Run: t4m plan        (see what's missing)
+#
+# Concepts:
+#   - Resources: Things you want to track (features, modules, endpoints, etc.)
+#   - Types: Categories of resources (feature, module, endpoint, migration, test)
+#   - Attributes: Metadata about each resource (description, functions, etc.)
+#   - Files: Optional file paths to help inference detect implementation
+#   - depends_on: Dependencies between resources (ensures correct build order)
+#
+# Inference:
+#   terra4mice can auto-detect resource status by analyzing:
+#   - File existence (files: [...])
+#   - AST analysis (functions, classes, entities in code)
+#   - Pattern matching (conventional paths)
+#   - Test detection
+#
+# Supported languages: Python, JavaScript, TypeScript, Solidity
+# ============================================================================
+
+version: "1"
+
+# ============================================================================
+# BACKEND CONFIGURATION (Optional)
+# ============================================================================
+# By default, terra4mice stores state in a local JSON file (terra4mice.state.json).
+# For team collaboration, you can use S3-compatible storage.
+#
+# backend:
+#   # Local backend (default) - state stored in project directory
+#   type: local
+#   path: terra4mice.state.json
+#
+#   # S3 backend - shared state for teams
+#   # type: s3
+#   # bucket: my-team-terra4mice
+#   # key: projects/myproject/terra4mice.state.json
+#   # region: us-east-1
+#   # profile: default  # AWS CLI profile (optional)
+#
+#   # Lock settings (for S3 backend to prevent conflicts)
+#   # locking: true
+#   # lock_timeout: 300  # seconds
+# ============================================================================
+
+resources:
+  # ==========================================================================
+  # FEATURES - High-level product capabilities
+  # ==========================================================================
+  # Use features for user-facing functionality that spans multiple modules.
+  # Features are great for tracking product roadmap items.
+  #
+  feature:
+    # Example: User authentication feature
+    user_auth:
+      attributes:
+        description: "User authentication with email/password and OAuth"
+        # List key functions/methods this feature should implement
+        functions: [login, logout, register, reset_password, verify_email]
+        # List entities/models this feature introduces
+        entities: [User, Session, Token]
+        # Add any custom attributes you want to track
+        priority: high
+        owner: "@backend-team"
+      # Files that indicate this feature is implemented
+      files:
+        - src/auth/login.py
+        - src/auth/register.py
+      # Dependencies - these must be created/completed first
+      depends_on: []
+
+    # Example: Feature with dependencies
+    user_profile:
+      attributes:
+        description: "User profile management"
+        functions: [get_profile, update_profile, upload_avatar]
+      files:
+        - src/users/profile.py
+      depends_on:
+        - feature.user_auth  # Can't have profiles without auth
+
+    # Planned feature (no files yet)
+    notifications:
+      attributes:
+        description: "Push and email notifications"
+        functions: [send_push, send_email, manage_preferences]
+        priority: medium
+        status_notes: "Planned for Q2"
+      depends_on:
+        - feature.user_auth
+
+  # ==========================================================================
+  # MODULES - Internal code organization
+  # ==========================================================================
+  # Modules represent internal code structure - packages, libraries, services.
+  # Use for tracking technical architecture.
+  #
+  module:
+    # Example: Core module with class definition
+    database:
+      attributes:
+        description: "Database connection and query management"
+        class: DatabaseManager
+        functions: [connect, disconnect, query, transaction]
+      files:
+        - src/db/manager.py
+        - src/db/__init__.py
+      depends_on: []
+
+    # Example: Module with multiple files
+    api_client:
+      attributes:
+        description: "HTTP client for external API calls"
+        class: APIClient
+        functions: [get, post, put, delete, authenticate]
+      files:
+        - src/clients/api.py
+        - src/clients/auth.py
+      depends_on:
+        - module.database
+
+    # Example: Utility module
+    utils:
+      attributes:
+        description: "Shared utility functions"
+        functions: [format_date, parse_json, validate_email, generate_id]
+      files:
+        - src/utils/__init__.py
+      depends_on: []
+
+  # ==========================================================================
+  # ENDPOINTS - API routes and handlers
+  # ==========================================================================
+  # Track REST/GraphQL endpoints. Great for API-first development.
+  #
+  endpoint:
+    # Example: REST endpoint
+    get_users:
+      attributes:
+        description: "List all users with pagination"
+        method: GET
+        path: "/api/v1/users"
+        handler: list_users
+        auth_required: true
+      files:
+        - src/api/routes/users.py
+      depends_on:
+        - module.database
+        - feature.user_auth
+
+    create_user:
+      attributes:
+        description: "Create a new user"
+        method: POST
+        path: "/api/v1/users"
+        handler: create_user
+        auth_required: false
+      files:
+        - src/api/routes/users.py
+      depends_on:
+        - module.database
+
+    # GraphQL endpoint example
+    user_query:
+      attributes:
+        description: "GraphQL user queries"
+        type: query
+        schema: "type Query { user(id: ID!): User, users: [User] }"
+      files:
+        - src/graphql/queries/user.py
+      depends_on:
+        - module.database
+
+  # ==========================================================================
+  # MIGRATIONS - Database schema changes
+  # ==========================================================================
+  # Track database migrations for schema evolution.
+  #
+  migration:
+    # Example: Initial migration
+    001_initial:
+      attributes:
+        description: "Initial database schema with users table"
+        tables_created: [users, sessions]
+        reversible: true
+      files:
+        - migrations/001_initial.sql
+      depends_on: []
+
+    002_add_profiles:
+      attributes:
+        description: "Add user profiles table"
+        tables_created: [profiles]
+        tables_modified: [users]
+        reversible: true
+      files:
+        - migrations/002_add_profiles.sql
+      depends_on:
+        - migration.001_initial
+
+    # Pending migration (planned)
+    003_add_notifications:
+      attributes:
+        description: "Add notifications table"
+        tables_created: [notifications, notification_preferences]
+        reversible: true
+      depends_on:
+        - migration.002_add_profiles
+
+  # ==========================================================================
+  # TESTS - Test coverage tracking
+  # ==========================================================================
+  # Track test implementation. Great for TDD workflows.
+  #
+  test:
+    # Unit tests
+    test_auth:
+      attributes:
+        description: "Unit tests for authentication module"
+        type: unit
+        coverage_target: 90
+      files:
+        - tests/test_auth.py
+      depends_on:
+        - feature.user_auth
+
+    test_database:
+      attributes:
+        description: "Database integration tests"
+        type: integration
+        coverage_target: 80
+      files:
+        - tests/test_database.py
+      depends_on:
+        - module.database
+
+    # E2E tests
+    test_user_flow:
+      attributes:
+        description: "End-to-end user registration and login flow"
+        type: e2e
+        scenarios: [register, login, update_profile, logout]
+      files:
+        - tests/e2e/test_user_flow.py
+      depends_on:
+        - feature.user_auth
+        - feature.user_profile
+        - endpoint.create_user
+        - endpoint.get_users
+
+  # ==========================================================================
+  # DOCUMENTATION
+  # ==========================================================================
+  # Track documentation completeness.
+  #
+  docs:
+    readme:
+      attributes:
+        description: "Project README with setup instructions"
+      files:
+        - README.md
+      depends_on: []
+
+    api_docs:
+      attributes:
+        description: "API documentation (OpenAPI/Swagger)"
+      files:
+        - docs/api.yaml
+        - docs/api.md
+      depends_on:
+        - endpoint.get_users
+        - endpoint.create_user
+
+    architecture:
+      attributes:
+        description: "Architecture decision records"
+      files:
+        - docs/architecture/README.md
+      depends_on: []
+
+  # ==========================================================================
+  # CUSTOM RESOURCE TYPES
+  # ==========================================================================
+  # You can define any resource type that makes sense for your project!
+  # Examples: contract (Solidity), component (React), workflow (CI/CD)
+  #
+  # contract:
+  #   token:
+  #     attributes:
+  #       description: "ERC20 token contract"
+  #       standard: ERC20
+  #       audited: false
+  #     files:
+  #       - contracts/Token.sol
+  #     depends_on: []
+  #
+  # component:
+  #   user_dashboard:
+  #     attributes:
+  #       description: "User dashboard React component"
+  #       props: [userId, theme]
+  #     files:
+  #       - src/components/UserDashboard.tsx
+  #     depends_on:
+  #       - endpoint.get_users
