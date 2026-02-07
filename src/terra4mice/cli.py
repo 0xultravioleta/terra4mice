@@ -9,6 +9,9 @@ Usage:
     terra4mice state list    List all resources in state
     terra4mice state show    Show details of a resource
     terra4mice mark          Mark a resource as created/partial/broken
+    terra4mice mark --lock   Mark and lock (survives refresh)
+    terra4mice lock          Lock a resource (prevent refresh overwrite)
+    terra4mice unlock        Unlock a resource (allow refresh)
     terra4mice apply         Interactive apply loop
     terra4mice ci            Run refresh + plan in CI mode
 """
@@ -159,6 +162,7 @@ def cmd_ci(args):
     if root_dir.exists():
         config = InferenceConfig()
         config.root_dir = root_dir
+        config.parallelism = getattr(args, 'parallelism', 0)
         engine = InferenceEngine(config)
         results = engine.infer_all(spec)
         updated = engine.apply_to_state(results, sm.state, only_missing=True)
@@ -229,9 +233,12 @@ def cmd_state_list(args):
         color = status_color.get(resource.status, "")
         reset = "\033[0m" if color else ""
 
-        print(f"{color}{resource.address}{reset}")
+        lock_icon = " \033[36m[locked]\033[0m" if resource.locked else ""
+        print(f"{color}{resource.address}{reset}{lock_icon}")
         if args.verbose:
             print(f"    status: {resource.status.value}")
+            if resource.locked:
+                print(f"    locked: true (source: {resource.source})")
             if resource.files:
                 print(f"    files: {', '.join(resource.files)}")
             if resource.symbols:
@@ -256,6 +263,9 @@ def cmd_state_show(args):
     print(f"type     = \"{resource.type}\"")
     print(f"name     = \"{resource.name}\"")
     print(f"status   = \"{resource.status.value}\"")
+    if resource.locked:
+        print(f"locked   = true")
+        print(f"source   = \"{resource.source}\"")
 
     if resource.files:
         print(f"files    = {resource.files}")
@@ -309,25 +319,61 @@ def cmd_mark(args):
 
     address = args.address
     status = args.status or "implemented"
+    lock = getattr(args, 'lock', False)
 
     # Parse files if provided
     files = args.files.split(",") if args.files else []
     tests = args.tests.split(",") if args.tests else []
 
     if status == "implemented":
-        resource = sm.mark_created(address, files=files, tests=tests)
+        resource = sm.mark_created(address, files=files, tests=tests, lock=lock)
     elif status == "partial":
-        resource = sm.mark_partial(address, reason=args.reason or "")
+        resource = sm.mark_partial(address, reason=args.reason or "", lock=lock)
     elif status == "broken":
-        resource = sm.mark_broken(address, reason=args.reason or "")
+        resource = sm.mark_broken(address, reason=args.reason or "", lock=lock)
     else:
         print(f"Unknown status: {status}")
         return 1
 
     sm.save()
 
-    print(f"Marked {resource.address} as {resource.status.value}")
+    lock_indicator = " (locked)" if resource.locked else ""
+    print(f"Marked {resource.address} as {resource.status.value}{lock_indicator}")
 
+    return 0
+
+
+def cmd_lock(args):
+    """Lock a resource to prevent refresh from overwriting it."""
+    sm = StateManager(args.state)
+    sm.load()
+
+    address = args.address
+    resource = sm.mark_locked(address, locked=True)
+
+    if resource is None:
+        print(f"Resource not found: {address}")
+        return 1
+
+    sm.save()
+    print(f"Locked: {resource.address} ({resource.status.value})")
+    return 0
+
+
+def cmd_unlock(args):
+    """Unlock a resource so refresh can update it."""
+    sm = StateManager(args.state)
+    sm.load()
+
+    address = args.address
+    resource = sm.mark_locked(address, locked=False)
+
+    if resource is None:
+        print(f"Resource not found: {address}")
+        return 1
+
+    sm.save()
+    print(f"Unlocked: {resource.address} ({resource.status.value})")
     return 0
 
 
@@ -352,6 +398,7 @@ def cmd_refresh(args):
     # Configure inference
     config = InferenceConfig()
     config.root_dir = Path(args.root) if args.root else Path.cwd()
+    config.parallelism = getattr(args, 'parallelism', 0)
 
     if args.source_dirs:
         config.source_dirs = args.source_dirs.split(",")
@@ -363,9 +410,11 @@ def cmd_refresh(args):
         _sys.stderr.write(f"\rScanning... [{current}/{total}] {resource.address:<40}")
         _sys.stderr.flush()
 
-    print(f"Scanning {config.root_dir} for resources...", file=_sys.stderr)
-
     engine = InferenceEngine(config)
+    workers = engine._effective_parallelism()
+    par_info = f" (parallelism={workers})" if workers > 1 else ""
+    print(f"Scanning {config.root_dir} for resources...{par_info}", file=_sys.stderr)
+
     results = engine.infer_all(spec, progress_callback=_progress)
     _sys.stderr.write("\r" + " " * 70 + "\r")
     _sys.stderr.flush()
@@ -639,6 +688,8 @@ def main():
                           help="Fail (exit 2) if convergence < 100%%")
     ci_parser.add_argument("--fail-under", type=float, default=None,
                           help="Fail if convergence < N%%")
+    ci_parser.add_argument("--parallelism", type=int, default=0,
+                          help="Number of parallel workers (0=auto, 1=sequential)")
 
     # state
     state_parser = subparsers.add_parser("state", help="State management commands")
@@ -668,7 +719,19 @@ def main():
     mark_parser.add_argument("--files", "-f", default="", help="Files that implement (comma-separated)")
     mark_parser.add_argument("--tests", "-t", default="", help="Tests that cover (comma-separated)")
     mark_parser.add_argument("--reason", "-r", default="", help="Reason (for partial/broken)")
+    mark_parser.add_argument("--lock", "-l", action="store_true",
+                            help="Lock resource to prevent refresh from overwriting")
     mark_parser.add_argument("--state", default=None, help="Path to state file")
+
+    # lock
+    lock_parser = subparsers.add_parser("lock", help="Lock resource (prevent refresh overwrite)")
+    lock_parser.add_argument("address", help="Resource address (type.name)")
+    lock_parser.add_argument("--state", default=None, help="Path to state file")
+
+    # unlock
+    unlock_parser = subparsers.add_parser("unlock", help="Unlock resource (allow refresh)")
+    unlock_parser.add_argument("address", help="Resource address (type.name)")
+    unlock_parser.add_argument("--state", default=None, help="Path to state file")
 
     # apply
     apply_parser = subparsers.add_parser("apply", help="Interactive apply loop")
@@ -688,6 +751,8 @@ def main():
                                help="Update all resources, not just missing ones")
     refresh_parser.add_argument("--show-plan", action="store_true",
                                help="Show plan after refresh")
+    refresh_parser.add_argument("--parallelism", type=int, default=0,
+                               help="Number of parallel workers (0=auto, 1=sequential)")
 
     # diff
     diff_parser = subparsers.add_parser("diff", help="Show changes between two state files")
@@ -721,6 +786,10 @@ def main():
             return 0
     elif args.command == "mark":
         return cmd_mark(args)
+    elif args.command == "lock":
+        return cmd_lock(args)
+    elif args.command == "unlock":
+        return cmd_unlock(args)
     elif args.command == "apply":
         return cmd_apply(args)
     elif args.command == "refresh":

@@ -11,6 +11,7 @@ Falls back gracefully when tree-sitter is not installed.
 """
 
 import sys
+import threading
 from dataclasses import dataclass, field
 from typing import Dict, Optional, Set, List, Any
 
@@ -82,20 +83,27 @@ class AnalysisResult:
 # ---------------------------------------------------------------------------
 _parser_cache: Dict[str, Any] = {}
 _language_cache: Dict[str, Any] = {}
+_cache_lock = threading.Lock()
 
 
 def _cached_parser(lang_name: str):
-    """Get or create a cached parser for a language."""
-    if lang_name not in _parser_cache:
-        _parser_cache[lang_name] = _get_parser(lang_name)
-    return _parser_cache[lang_name]
+    """Get or create a cached parser for a language (thread-safe)."""
+    if lang_name in _parser_cache:
+        return _parser_cache[lang_name]
+    with _cache_lock:
+        if lang_name not in _parser_cache:
+            _parser_cache[lang_name] = _get_parser(lang_name)
+        return _parser_cache[lang_name]
 
 
 def _cached_language(lang_name: str):
-    """Get or create a cached language for queries."""
-    if lang_name not in _language_cache:
-        _language_cache[lang_name] = _get_language(lang_name)
-    return _language_cache[lang_name]
+    """Get or create a cached language for queries (thread-safe)."""
+    if lang_name in _language_cache:
+        return _language_cache[lang_name]
+    with _cache_lock:
+        if lang_name not in _language_cache:
+            _language_cache[lang_name] = _get_language(lang_name)
+        return _language_cache[lang_name]
 
 
 # ---------------------------------------------------------------------------

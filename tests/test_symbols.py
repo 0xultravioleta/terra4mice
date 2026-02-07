@@ -559,3 +559,200 @@ class TestSymbolDisplay:
         assert "3" in captured.out  # total count
         assert "Engine" in captured.out
         assert "MISSING" in captured.out
+
+
+# ---------------------------------------------------------------------------
+# Parallelism tests
+# ---------------------------------------------------------------------------
+
+class TestEffectiveParallelism:
+    """Test _effective_parallelism resolution."""
+
+    def test_explicit_value(self, tmp_path):
+        config = InferenceConfig(root_dir=tmp_path, parallelism=4)
+        engine = InferenceEngine(config)
+        assert engine._effective_parallelism() == 4
+
+    def test_sequential_mode(self, tmp_path):
+        config = InferenceConfig(root_dir=tmp_path, parallelism=1)
+        engine = InferenceEngine(config)
+        assert engine._effective_parallelism() == 1
+
+    def test_auto_mode(self, tmp_path):
+        """parallelism=0 means auto: min(8, cpu_count)."""
+        config = InferenceConfig(root_dir=tmp_path, parallelism=0)
+        engine = InferenceEngine(config)
+        import os
+        expected = min(8, os.cpu_count() or 4)
+        assert engine._effective_parallelism() == expected
+
+    def test_negative_clamped(self, tmp_path):
+        """Negative values get clamped to 1."""
+        config = InferenceConfig(root_dir=tmp_path, parallelism=-5)
+        engine = InferenceEngine(config)
+        assert engine._effective_parallelism() == 1
+
+
+class TestParallelInferAll:
+    """Test that parallel infer_all produces same results as sequential."""
+
+    def _make_test_project(self, tmp_path):
+        """Create a small project with multiple resources."""
+        from terra4mice.models import Spec
+        # Create source files
+        src = tmp_path / "src"
+        src.mkdir()
+        (src / "auth.py").write_text("class Auth:\n    def login(self):\n        pass\n")
+        (src / "users.py").write_text("def list_users():\n    pass\ndef get_user():\n    pass\n")
+        (src / "payments.py").write_text("class PaymentProcessor:\n    def charge(self):\n        pass\n")
+
+        # Create spec
+        spec = Spec()
+        for name in ["auth", "users", "payments"]:
+            r = Resource(type="module", name=name, status=ResourceStatus.MISSING)
+            spec.add(r)
+        return spec
+
+    def test_parallel_same_as_sequential(self, tmp_path):
+        """Parallel and sequential paths produce identical results."""
+        spec = self._make_test_project(tmp_path)
+
+        # Sequential
+        config_seq = InferenceConfig(root_dir=tmp_path, parallelism=1)
+        engine_seq = InferenceEngine(config_seq)
+        results_seq = engine_seq.infer_all(spec)
+
+        # Parallel
+        config_par = InferenceConfig(root_dir=tmp_path, parallelism=4)
+        engine_par = InferenceEngine(config_par)
+        results_par = engine_par.infer_all(spec)
+
+        # Same count
+        assert len(results_seq) == len(results_par)
+
+        # Same addresses in same order
+        addrs_seq = [r.address for r in results_seq]
+        addrs_par = [r.address for r in results_par]
+        assert addrs_seq == addrs_par
+
+        # Same statuses
+        for rs, rp in zip(results_seq, results_par):
+            assert rs.status == rp.status, f"{rs.address}: {rs.status} != {rp.status}"
+            assert rs.confidence == rp.confidence
+
+    def test_sequential_fallback_single_resource(self, tmp_path):
+        """With only 1 resource, uses sequential path even with parallelism > 1."""
+        from terra4mice.models import Spec
+        spec = Spec()
+        spec.add(Resource(type="module", name="only", status=ResourceStatus.MISSING))
+        (tmp_path / "src").mkdir()
+        (tmp_path / "src" / "only.py").write_text("x = 1\n")
+
+        config = InferenceConfig(root_dir=tmp_path, parallelism=8)
+        engine = InferenceEngine(config)
+        results = engine.infer_all(spec)
+        assert len(results) == 1
+
+    def test_progress_callback_called(self, tmp_path):
+        """Progress callback fires for each resource in parallel mode."""
+        spec = self._make_test_project(tmp_path)
+        calls = []
+
+        def cb(current, total, resource):
+            calls.append((current, total, resource.address))
+
+        config = InferenceConfig(root_dir=tmp_path, parallelism=4)
+        engine = InferenceEngine(config)
+        engine.infer_all(spec, progress_callback=cb)
+
+        # Should be called once per resource
+        assert len(calls) == 3
+        # All calls have total=3
+        assert all(t == 3 for _, t, _ in calls)
+
+    def test_empty_spec_no_crash(self, tmp_path):
+        """Empty spec produces empty results without errors."""
+        from terra4mice.models import Spec
+        spec = Spec()
+        config = InferenceConfig(root_dir=tmp_path, parallelism=4)
+        engine = InferenceEngine(config)
+        results = engine.infer_all(spec)
+        assert results == []
+
+
+@pytest.mark.skipif(not HAS_TREE_SITTER, reason="tree-sitter not installed")
+class TestThreadSafeCache:
+    """Test that tree-sitter cache is thread-safe."""
+
+    def test_concurrent_parser_access(self):
+        """Multiple threads requesting the same parser don't crash."""
+        import threading
+        from terra4mice.analyzers import _cached_parser
+
+        errors = []
+
+        def get_parser():
+            try:
+                p = _cached_parser("python")
+                assert p is not None
+            except Exception as e:
+                errors.append(e)
+
+        threads = [threading.Thread(target=get_parser) for _ in range(10)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert errors == [], f"Thread errors: {errors}"
+
+    def test_concurrent_language_access(self):
+        """Multiple threads requesting the same language don't crash."""
+        import threading
+        from terra4mice.analyzers import _cached_language
+
+        errors = []
+
+        def get_lang():
+            try:
+                lang = _cached_language("python")
+                assert lang is not None
+            except Exception as e:
+                errors.append(e)
+
+        threads = [threading.Thread(target=get_lang) for _ in range(10)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert errors == [], f"Thread errors: {errors}"
+
+    def test_concurrent_analyze_file(self):
+        """Multiple threads calling analyze_file in parallel don't crash."""
+        import threading
+        from terra4mice.analyzers import analyze_file
+
+        source = b"def hello():\n    pass\n\nclass World:\n    def greet(self):\n        return 42\n"
+        errors = []
+        results = []
+
+        def do_analyze():
+            try:
+                r = analyze_file("test.py", source)
+                results.append(r)
+            except Exception as e:
+                errors.append(e)
+
+        threads = [threading.Thread(target=do_analyze) for _ in range(10)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert errors == [], f"Thread errors: {errors}"
+        assert len(results) == 10
+        # All results should be identical
+        for r in results:
+            assert "hello" in r.functions
+            assert "World" in r.classes

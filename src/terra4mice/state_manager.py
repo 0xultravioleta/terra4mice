@@ -105,6 +105,7 @@ class StateManager:
         files: List[str] = None,
         tests: List[str] = None,
         attributes: dict = None,
+        lock: bool = False,
     ) -> Resource:
         """
         Mark a resource as created (implemented).
@@ -117,6 +118,7 @@ class StateManager:
             files: Files that implement this resource
             tests: Tests that cover this resource
             attributes: Additional attributes
+            lock: If True, lock resource to prevent refresh overwrite
 
         Returns:
             The created/updated resource
@@ -134,6 +136,10 @@ class StateManager:
                 status=ResourceStatus.IMPLEMENTED,
             )
 
+        resource.source = "manual"
+        if lock:
+            resource.locked = True
+
         if files:
             resource.files = files
         if tests:
@@ -144,13 +150,14 @@ class StateManager:
         self.state.set(resource)
         return resource
 
-    def mark_partial(self, address: str, reason: str = "") -> Resource:
+    def mark_partial(self, address: str, reason: str = "", lock: bool = False) -> Resource:
         """
         Mark a resource as partially implemented.
 
         Args:
             address: Resource address
             reason: Why it's partial
+            lock: If True, lock resource to prevent refresh overwrite
 
         Returns:
             Updated resource
@@ -161,19 +168,23 @@ class StateManager:
             resource = Resource(type=resource_type, name=resource_name)
 
         resource.status = ResourceStatus.PARTIAL
+        resource.source = "manual"
+        if lock:
+            resource.locked = True
         if reason:
             resource.attributes["partial_reason"] = reason
 
         self.state.set(resource)
         return resource
 
-    def mark_broken(self, address: str, reason: str = "") -> Resource:
+    def mark_broken(self, address: str, reason: str = "", lock: bool = False) -> Resource:
         """
         Mark a resource as broken.
 
         Args:
             address: Resource address
             reason: Why it's broken
+            lock: If True, lock resource to prevent refresh overwrite
 
         Returns:
             Updated resource
@@ -184,9 +195,35 @@ class StateManager:
             resource = Resource(type=resource_type, name=resource_name)
 
         resource.status = ResourceStatus.BROKEN
+        resource.source = "manual"
+        if lock:
+            resource.locked = True
         if reason:
             resource.attributes["broken_reason"] = reason
 
+        self.state.set(resource)
+        return resource
+
+    def mark_locked(self, address: str, locked: bool = True) -> Optional[Resource]:
+        """
+        Lock or unlock a resource in state.
+
+        Locked resources are not overwritten by refresh.
+
+        Args:
+            address: Resource address (type.name)
+            locked: True to lock, False to unlock
+
+        Returns:
+            Updated resource or None if not found
+        """
+        resource = self.state.get(address)
+        if resource is None:
+            return None
+
+        resource.locked = locked
+        if locked:
+            resource.source = "manual"
         self.state.set(resource)
         return resource
 
@@ -219,6 +256,8 @@ class StateManager:
                 type=resource_data["type"],
                 name=resource_data["name"],
                 status=ResourceStatus(resource_data.get("status", "missing")),
+                locked=resource_data.get("locked", False),
+                source=resource_data.get("source", "auto"),
                 attributes=resource_data.get("attributes", {}),
                 depends_on=resource_data.get("depends_on", []),
                 files=resource_data.get("files", []),
@@ -254,6 +293,8 @@ class StateManager:
                 "type": resource.type,
                 "name": resource.name,
                 "status": resource.status.value,
+                "locked": resource.locked,
+                "source": resource.source,
                 "attributes": resource.attributes,
                 "depends_on": resource.depends_on,
                 "files": resource.files,

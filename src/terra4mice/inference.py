@@ -17,6 +17,7 @@ import ast
 import glob
 import fnmatch
 import subprocess
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import List, Dict, Optional, Set, Tuple
 from dataclasses import dataclass, field
@@ -91,6 +92,10 @@ class InferenceConfig:
     min_confidence_implemented: float = 0.7
     min_confidence_partial: float = 0.3
 
+    # Parallelism: number of concurrent workers for resource inference
+    # 0 = auto (min(8, cpu_count)), 1 = sequential (no threading)
+    parallelism: int = 0
+
 
 class InferenceEngine:
     """
@@ -152,29 +157,59 @@ class InferenceEngine:
         self._file_index = files
         return files
 
+    def _effective_parallelism(self) -> int:
+        """Resolve parallelism setting to actual worker count."""
+        p = self.config.parallelism
+        if p == 0:
+            return min(8, os.cpu_count() or 4)
+        return max(1, p)
+
     def infer_all(self, spec: Spec, progress_callback=None) -> List[InferenceResult]:
         """
         Infer status for all resources in spec.
+
+        Uses ThreadPoolExecutor for parallel inference when parallelism > 1.
+        File index is built once before parallel work begins (shared read-only).
 
         Args:
             spec: The spec defining desired resources
             progress_callback: Optional callable(current, total, resource) for progress
 
         Returns:
-            List of inference results
+            List of inference results (ordered same as spec)
         """
-        # Build file index once for all resources
+        # Build file index once for all resources (shared read-only)
         self._build_file_index()
 
         resources = spec.list()
         total = len(resources)
-        results = []
+        workers = self._effective_parallelism()
 
-        for i, resource in enumerate(resources):
-            if progress_callback:
-                progress_callback(i + 1, total, resource)
-            result = self.infer_resource(resource)
-            results.append(result)
+        if workers <= 1 or total <= 1:
+            # Sequential path (original behavior, also used for --parallelism 1)
+            results = []
+            for i, resource in enumerate(resources):
+                if progress_callback:
+                    progress_callback(i + 1, total, resource)
+                result = self.infer_resource(resource)
+                results.append(result)
+            return results
+
+        # Parallel path
+        results = [None] * total
+        completed = 0
+
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            future_to_idx = {
+                executor.submit(self.infer_resource, resource): i
+                for i, resource in enumerate(resources)
+            }
+            for future in as_completed(future_to_idx):
+                idx = future_to_idx[future]
+                results[idx] = future.result()
+                completed += 1
+                if progress_callback:
+                    progress_callback(completed, total, resources[idx])
 
         return results
 
@@ -411,13 +446,20 @@ class InferenceEngine:
             if not full_path.exists():
                 continue
 
-            # Try tree-sitter first for supported extensions
-            if use_tree_sitter and file_path.endswith(
+            # Read file bytes ONCE for all strategies
+            try:
+                with open(full_path, 'rb') as f:
+                    source_bytes = f.read()
+            except IOError:
+                continue
+
+            is_code = file_path.endswith(
                 ('.py', '.ts', '.tsx', '.js', '.jsx', '.sol')
-            ):
+            )
+
+            # Try tree-sitter first for supported extensions
+            if use_tree_sitter and is_code:
                 try:
-                    with open(full_path, 'rb') as f:
-                        source_bytes = f.read()
                     ts_result = ts_analyzers.analyze_file(file_path, source_bytes)
                     if ts_result is not None:
                         spec_score = ts_analyzers.score_against_spec(
@@ -447,43 +489,33 @@ class InferenceEngine:
                     pass
                 # Fall through to legacy analysis if tree-sitter failed
 
+            # Decode bytes once for fallback strategies
+            try:
+                source_text = source_bytes.decode('utf-8')
+            except UnicodeDecodeError:
+                continue
+
             if file_path.endswith('.py'):
                 try:
-                    with open(full_path, 'r', encoding='utf-8') as f:
-                        source = f.read()
-                    tree = ast.parse(source)
+                    tree = ast.parse(source_text)
                     score = self._score_ast(tree, resource)
                     total_score += score
                     analyzed += 1
-                except (SyntaxError, UnicodeDecodeError):
+                except SyntaxError:
                     continue
             elif file_path.endswith('.sol'):
-                try:
-                    with open(full_path, 'r', encoding='utf-8') as f:
-                        source = f.read()
-                    score = self._score_solidity(source, resource)
-                    total_score += score
-                    analyzed += 1
-                except (UnicodeDecodeError, IOError):
-                    continue
+                score = self._score_solidity(source_text, resource)
+                total_score += score
+                analyzed += 1
             elif file_path.endswith(('.ts', '.tsx', '.js', '.jsx')):
-                try:
-                    with open(full_path, 'r', encoding='utf-8') as f:
-                        source = f.read()
-                    score = self._score_typescript_fallback(source, resource)
-                    total_score += score
-                    analyzed += 1
-                except (UnicodeDecodeError, IOError):
-                    continue
+                score = self._score_typescript_fallback(source_text, resource)
+                total_score += score
+                analyzed += 1
             elif file_path.endswith(('.md', '.yaml', '.yml', '.toml', '.json')):
                 # For config/doc files, just check they have content
-                try:
-                    size = full_path.stat().st_size
-                    if size > 50:
-                        total_score += 0.5
-                        analyzed += 1
-                except IOError:
-                    continue
+                if len(source_bytes) > 50:
+                    total_score += 0.5
+                    analyzed += 1
 
         if analyzed == 0:
             return 0.0
@@ -712,9 +744,13 @@ class InferenceEngine:
         updated = []
 
         for result in results:
+            # Never overwrite locked resources (manually marked)
+            existing = state.get(result.address)
+            if existing and getattr(existing, 'locked', False):
+                continue
+
             # Skip if only updating missing and resource already exists
             if only_missing:
-                existing = state.get(result.address)
                 if existing and existing.status != ResourceStatus.MISSING:
                     continue
 

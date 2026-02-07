@@ -57,6 +57,10 @@ class Resource:
     name: str                     # Unique name within type
     status: ResourceStatus = ResourceStatus.MISSING
 
+    # Lock: when True, refresh will not overwrite this resource
+    locked: bool = False
+    source: str = "auto"          # "auto" (inference) or "manual" (user mark)
+
     # Spec attributes (desired state)
     attributes: Dict[str, Any] = field(default_factory=dict)
 
