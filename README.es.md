@@ -378,25 +378,155 @@ jobs:
 |-------|--------|-------------|
 | 1 - MVP CLI | DONE | init, plan, refresh, state, mark, apply, ci |
 | 2 - tree-sitter AST | DONE | Multi-language deep analysis, spec attribute verification |
-| 3 - Multi-AI Contexts | PLANNED | Track which AI (Claude, Codex, Kimi) has context on what |
+| 3 - Multi-AI Contexts | DONE | Track which AI (Claude, Codex, Kimi) has context on what |
 | 4 - CI/CD Integration | DONE | GitHub Action, PR comments, convergence badges |
 | 4.5 - Remote State | DONE | S3 backend, DynamoDB locking, state pull/push, migrate-state |
 | 5 - Apply Runner | PLANNED | Interactive apply loop, agent integration |
 | 6 - Ecosystem Rollout | PLANNED | Deploy across Ultravioleta DAO projects |
 
-### Phase 3: Multi-AI Context Tracking (Next)
+## Seguimiento de Contexto Multi-Agente
 
-Cuando multiples AIs trabajan en el mismo proyecto, cada una lleva su propio contexto aislado. Phase 3 agrega un **context registry** para saber que AI tiene contexto de que:
+Cuando multiples AIs trabajan en el mismo proyecto, cada una lleva su propio contexto aislado. El grupo de comandos `contexts` provee un **registro de contextos** para saber que AI tiene contexto de que recursos.
+
+### `terra4mice contexts list`
+
+Muestra todos los agentes y sus contextos de recursos:
+
+```
+$ terra4mice contexts list
+
+AGENT          RESOURCE              LAST SEEN    STATUS
+claude-code    module.inference      2min ago     active
+claude-code    module.analyzers      2min ago     active
+codex          feature.auth_login    1hr ago      stale
+kimi-2.5       feature.frontend      30min ago    active
+
+Agents: 3 | Active contexts: 4 | Stale: 1
+```
+
+### `terra4mice contexts show <agent>`
+
+Muestra contexto detallado para un agente especifico:
+
+```
+$ terra4mice contexts show claude-code
+
+# claude-code
+Last active: 2min ago
+Status: active
+
+Resources in context:
+  module.inference      implemented    2min ago
+  module.analyzers      implemented    2min ago
+  feature.ci            partial        15min ago
+
+Files touched:
+  src/terra4mice/inference.py
+  src/terra4mice/analyzers.py
+```
+
+### `terra4mice contexts sync`
+
+Sincronizar contexto entre agentes:
 
 ```bash
-terra4mice contexts list
-# AGENT          RESOURCE              LAST SEEN    STATUS
-# claude-code    module.inference      2min ago     active
-# codex          feature.auth_login    1hr ago      stale
-# kimi-2.5       feature.frontend      30min ago    active
-
-terra4mice mark module.auth implemented --agent=codex
+# Sincronizar todo el contexto de un agente a otro
 terra4mice contexts sync --from=claude-code --to=codex
+
+# Sincronizar solo recursos especificos
+terra4mice contexts sync --from=claude-code --to=codex --resources=module.inference,module.analyzers
+
+# Dry run para ver que se sincronizaria
+terra4mice contexts sync --from=claude-code --to=codex --dry-run
+```
+
+### `terra4mice contexts export / import`
+
+Exportar e importar contextos de agentes para backup o transferencia:
+
+```bash
+# Exportar contexto de un agente a archivo
+terra4mice contexts export claude-code -o claude-context.json
+
+# Importar contexto desde archivo
+terra4mice contexts import codex -i claude-context.json
+
+# Exportar todos los agentes
+terra4mice contexts export --all -o all-contexts.json
+```
+
+### `terra4mice mark --agent`
+
+Marcar recursos con atribucion de agente:
+
+```bash
+# Marcar como implementado por un agente especifico
+terra4mice mark module.auth --status implemented --agent=codex --files src/auth.py
+
+# Marcar como parcial con contexto de agente
+terra4mice mark feature.payments --status partial --agent=claude-code --reason "Missing refund logic"
+```
+
+Esto automaticamente actualiza el registro de contextos para que otros agentes sepan quien trabajo en que.
+
+## Ejemplos de Workflows Multi-Agente
+
+### Ejemplo 1: Handoff Entre Agentes
+
+Cuando un agente completa trabajo y otro toma el control:
+
+```bash
+# Claude termina de trabajar en inference
+terra4mice mark module.inference --status implemented --agent=claude-code --files src/inference.py
+
+# Antes de que Codex empiece, sincronizar contexto
+terra4mice contexts sync --from=claude-code --to=codex --resources=module.inference
+
+# Codex ahora puede ver lo que hizo Claude
+terra4mice contexts show codex
+```
+
+### Ejemplo 2: Desarrollo en Paralelo
+
+Multiples agentes trabajando en diferentes features:
+
+```bash
+# Ver quien trabaja en que
+terra4mice contexts list
+
+# Cada agente marca su propio trabajo
+terra4mice mark feature.auth --agent=claude-code --status implemented
+terra4mice mark feature.payments --agent=kimi-2.5 --status partial
+
+# Verificar conflictos (mismo recurso, diferentes agentes)
+terra4mice plan --check-conflicts
+```
+
+### Ejemplo 3: Recuperacion de Contexto
+
+Cuando un agente pierde contexto (nueva sesion):
+
+```bash
+# Exportar contexto antes de que termine la sesion
+terra4mice contexts export claude-code -o session-backup.json
+
+# En nueva sesion, restaurar contexto
+terra4mice contexts import claude-code -i session-backup.json
+
+# O sincronizar desde otro agente que tenga contexto actual
+terra4mice contexts sync --from=codex --to=claude-code
+```
+
+### Ejemplo 4: Integracion CI con Multi-Agente
+
+```yaml
+# .github/workflows/terra4mice.yml
+- name: Check convergence and contexts
+  run: |
+    terra4mice plan --detailed-exitcode
+    terra4mice contexts list --format json > contexts.json
+    # Fail si algun contexto esta stale > 24h
+    terra4mice contexts list --stale-threshold 24h --fail-if-stale
 ```
 
 ## Filosofia
