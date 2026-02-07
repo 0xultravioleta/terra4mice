@@ -1,8 +1,12 @@
+LICENSE
 README.md
 pyproject.toml
 src/terra4mice/__init__.py
+src/terra4mice/analyzers.py
+src/terra4mice/backends.py
 src/terra4mice/ci.py
 src/terra4mice/cli.py
+src/terra4mice/contexts.py
 src/terra4mice/inference.py
 src/terra4mice/models.py
 src/terra4mice/planner.py
@@ -14,4 +18,8 @@ src/terra4mice.egg-info/dependency_links.txt
 src/terra4mice.egg-info/entry_points.txt
 src/terra4mice.egg-info/requires.txt
 src/terra4mice.egg-info/top_level.txt
+tests/test_analyzers.py
+tests/test_backends.py
 tests/test_ci.py
+tests/test_contexts.py
+tests/test_symbols.py

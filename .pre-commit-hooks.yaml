@@ -1,0 +1,8 @@
+- id: terra4mice-check
+  name: terra4mice convergence check
+  description: Check that codebase state converges with spec
+  entry: terra4mice plan --no-color --detailed-exitcode
+  language: python
+  pass_filenames: false
+  always_run: true
+  additional_dependencies: ['pyyaml>=6.0']

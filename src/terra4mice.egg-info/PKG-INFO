@@ -4,10 +4,10 @@ Version: 0.1.0
 Summary: State-Driven Development Framework - Terraform for your codebase
 Author-email: Ultravioleta DAO <ultravioletadao@gmail.com>
 License: MIT
-Project-URL: Homepage, https://github.com/ultravioletadao/terra4mice
-Project-URL: Documentation, https://github.com/ultravioletadao/terra4mice#readme
-Project-URL: Repository, https://github.com/ultravioletadao/terra4mice
-Project-URL: Issues, https://github.com/ultravioletadao/terra4mice/issues
+Project-URL: Homepage, https://github.com/0xultravioleta/terra4mice
+Project-URL: Documentation, https://github.com/0xultravioleta/terra4mice#readme
+Project-URL: Repository, https://github.com/0xultravioleta/terra4mice
+Project-URL: Issues, https://github.com/0xultravioleta/terra4mice/issues
 Keywords: development,state-management,terraform,vivecoding,specification,tracking
 Classifier: Development Status :: 3 - Alpha
 Classifier: Intended Audience :: Developers
@@ -22,74 +22,92 @@ Classifier: Topic :: Software Development :: Build Tools
 Classifier: Topic :: Software Development :: Quality Assurance
 Requires-Python: >=3.9
 Description-Content-Type: text/markdown
+License-File: LICENSE
 Requires-Dist: pyyaml>=6.0
 Provides-Extra: dev
 Requires-Dist: pytest>=7.0; extra == "dev"
 Requires-Dist: pytest-cov; extra == "dev"
 Requires-Dist: black; extra == "dev"
 Requires-Dist: mypy; extra == "dev"
+Provides-Extra: ast
+Requires-Dist: tree-sitter>=0.23.0; extra == "ast"
+Requires-Dist: tree-sitter-language-pack>=0.4.0; extra == "ast"
+Provides-Extra: remote
+Requires-Dist: boto3>=1.26.0; extra == "remote"
+Provides-Extra: all
+Requires-Dist: terra4mice[ast,dev,remote]; extra == "all"
+Dynamic: license-file
 
 # terra4mice
 
 > State-Driven Development Framework
 >
-> "El software no está listo cuando funciona, está listo cuando el state converge con el spec"
+> "Software isn't done when it works. It's done when state converges with spec."
 
-terra4mice aplica el modelo mental de Terraform al desarrollo de software. Mientras Terraform gestiona infraestructura, terra4mice gestiona **desarrollo vivo**.
+terra4mice applies Terraform's mental model to software development. While Terraform manages infrastructure, terra4mice manages **living development**.
 
-## El Problema
+## The Problem
 
-En el vivecoding, pasa esto:
+In livecoding, this happens:
 
-1. Se implementa A
-2. B rompe A
-3. Se hace workaround C
-4. Queda TODO para D
-5. Alguien dice "ya funciona"
-6. Semanas después: D nunca existió
+1. You implement A
+2. B breaks A
+3. You workaround with C
+4. D becomes a TODO
+5. Someone says "it works"
+6. Weeks later: D never existed
 
-**El sistema no sabe**:
-- Qué partes del spec están completas
-- Qué partes están mockeadas
-- Qué partes existen solo en tu cabeza
+**The system doesn't know**:
+- Which parts of the spec are complete
+- Which parts are mocked
+- Which parts only exist in your head
 
-## La Solución
+## The Solution
 
 ```
-SPEC (desired state)  →  Lo que DEBE existir (YAML declarativo)
-STATE (current state) →  Lo que EXISTE (inferido/marcado)
-PLAN (diff)           →  spec - state = trabajo a hacer
-APPLY (execution)     →  Ciclos hasta convergencia
+SPEC (desired state)  ->  What SHOULD exist (declarative YAML)
+STATE (current state) ->  What DOES exist (inferred/marked)
+PLAN (diff)           ->  spec - state = work to do
+APPLY (execution)     ->  Cycles until convergence
 ```
 
 ## Quick Start
 
 ```bash
-# Instalar
+# Install
 pip install terra4mice
 
-# Inicializar en tu proyecto
+# With deep AST analysis (optional, Python >=3.10)
+pip install terra4mice[ast]
+
+# With remote state backend (S3 + DynamoDB locking)
+pip install terra4mice[remote]
+
+# Initialize in your project
 cd my-project
 terra4mice init
 
-# Ver qué falta
+# See what's missing
 terra4mice plan
 
-# Listar recursos en state
+# Auto-detect codebase state
+terra4mice refresh
+
+# List resources in state
 terra4mice state list
 
-# Marcar algo como implementado
+# Mark something as implemented
 terra4mice mark feature.auth_login --files src/auth.py
 
-# Ver plan actualizado
-terra4mice plan
+# CI report (JSON)
+terra4mice ci --format json
 ```
 
-## Comandos
+## Commands
 
 ### `terra4mice init`
 
-Crea archivos de spec y state:
+Creates spec and state files:
 
 ```bash
 terra4mice init
@@ -99,7 +117,7 @@ terra4mice init
 
 ### `terra4mice plan`
 
-Muestra qué falta para converger:
+Shows what's needed to converge:
 
 ```
 $ terra4mice plan
@@ -116,9 +134,59 @@ terra4mice will perform the following actions:
 Plan: 2 to create, 1 to update.
 ```
 
+With `--verbose`, plan shows function-level symbol tracking:
+
+```
+$ terra4mice plan --verbose
+
+  ~ module.inference
+      # Resource is partially implemented
+      Symbols: 10/12 found
+        - format_report (missing)
+        - validate_config (missing)
+```
+
+### `terra4mice refresh`
+
+Auto-detects codebase state using multiple strategies:
+
+```
+$ terra4mice refresh
+
+Scanning /my-project for resources...
+
+Inference Report
+============================================================
+IMPLEMENTED (5 resources)
+  module.models
+    Confidence: [##########] 100%
+    Files: src/models.py
+    Evidence: Explicit files found, AST analysis: 100% match
+    Symbols: 12/12 (100%)
+
+PARTIAL (1 resources)
+  feature.auth
+    Confidence: [######----] 60%
+    Symbols: 5/8 (62%)
+    Missing: validate_token, refresh_session, logout_handler
+
+MISSING (2 resources)
+  feature.payments
+  feature.notifications
+
+Summary
+  Convergence: 68.8%
+```
+
+Inference strategies (in priority order):
+1. **tree-sitter AST** (with `[ast]`) - verifies functions, classes, exports against spec attributes
+2. **stdlib ast** - basic Python analysis
+3. **Regex** - Solidity, TypeScript/JavaScript patterns
+4. **Heuristic** - config/docs file size
+
 ### `terra4mice state list`
 
-Lista todos los recursos en el state:
+Lists all resources in state:
 
 ```
 $ terra4mice state list
@@ -130,37 +198,42 @@ module.payment_processor
 
 ### `terra4mice state show <address>`
 
-Muestra detalles de un recurso:
+Shows resource details including symbol-level tracking:
 
 ```
-$ terra4mice state show feature.auth_login
+$ terra4mice state show module.inference
 
-# feature.auth_login
-type     = "feature"
-name     = "auth_login"
+# module.inference
+type     = "module"
+name     = "inference"
 status   = "implemented"
-files    = ["src/auth.py", "src/routes/login.py"]
-tests    = ["tests/test_auth.py"]
+files    = ["src/terra4mice/inference.py"]
+symbols  = 12 (10 implemented, 2 missing)
+  InferenceEngine                     class      lines 94-686 (src/terra4mice/inference.py)
+  InferenceEngine.infer_all           method     lines 154-178 (src/terra4mice/inference.py)
+  InferenceEngine.infer_resource      method     lines 180-245 (src/terra4mice/inference.py)
+  format_inference_report             function   lines 719-787 (src/terra4mice/inference.py)
+  validate_config                     function   [MISSING]
 ```
 
 ### `terra4mice mark <address>`
 
-Marca un recurso con un status:
+Marks a resource with a status:
 
 ```bash
-# Marcar como implementado
+# Mark as implemented
 terra4mice mark feature.auth_login --files src/auth.py
 
-# Marcar como parcial
+# Mark as partial
 terra4mice mark feature.auth_refresh --status partial --reason "Missing token rotation"
 
-# Marcar como roto
+# Mark as broken
 terra4mice mark feature.auth_logout --status broken --reason "Tests failing"
 ```
 
 ### `terra4mice apply`
 
-Loop interactivo para implementar el plan:
+Interactive apply loop:
 
 ```
 $ terra4mice apply
@@ -174,6 +247,76 @@ Attributes: {'endpoints': ['POST /auth/login']}
 Action: [i]mplement, [p]artial, [s]kip, [q]uit? i
 Files that implement this: src/auth.py, src/routes/login.py
 Marked as implemented: feature.auth_login
+```
+
+### `terra4mice state pull / push`
+
+Sync state between local and remote backends:
+
+```bash
+# Download remote state to a local file
+terra4mice state pull -o local_backup.json
+
+# Upload local state to the remote backend
+terra4mice state push -i local_backup.json
+```
+
+### `terra4mice force-unlock <lock-id>`
+
+Force-release a stuck state lock (when a process crashes mid-operation):
+
+```bash
+terra4mice force-unlock a1b2c3d4-5678-9abc-def0-123456789abc
+# Lock forcefully released: a1b2c3d4-...
+# WARNING: Releasing a lock held by another process may cause state corruption.
+```
+
+### `terra4mice init --migrate-state`
+
+Migrate local state to a remote backend configured in the spec:
+
+```bash
+# 1. Add backend: section to terra4mice.spec.yaml
+# 2. Run migration
+terra4mice init --migrate-state
+# State migrated to s3 backend.
+#   Resources: 12
+#   Serial: 45
+```
+
+### `terra4mice diff`
+
+Compare two state snapshots to see what changed:
+
+```
+$ terra4mice diff --old state.json.bak
+
+terra4mice diff
+==================================================
+  Old: state.json.bak (serial 5)
+  New: terra4mice.state.json (serial 8)
+
+Upgraded (3):
+  module.inference: partial -> implemented
+  module.analyzers: missing -> implemented
+  feature.ci: partial -> implemented
+
+Convergence: 45.0% -> 78.3% (+33.3%)
+```
+
+### `terra4mice ci`
+
+Output for CI/CD pipelines:
+
+```bash
+# JSON (machine-readable)
+terra4mice ci --format json
+
+# Markdown (PR comments)
+terra4mice ci --format markdown --comment pr-comment.md
+
+# Fail if convergence < threshold
+terra4mice ci --fail-under 80
 ```
 
 ## Spec File Format
@@ -196,6 +339,14 @@ resources:
       depends_on:
         - feature.auth_login
 
+  module:
+    state_manager:
+      attributes:
+        class: StateManager
+        functions: [load, save, list, mark_created]
+      files:
+        - src/state_manager.py
+
   endpoint:
     api_users:
       attributes:
@@ -203,12 +354,24 @@ resources:
         path: /api/users
       depends_on:
         - feature.auth_login
-
-  module:
-    payment_processor:
-      attributes:
-        provider: x402
 ```
+
+### Spec Attributes for AST Verification
+
+With `terra4mice[ast]` installed, these attributes are verified against actual code:
+
+```yaml
+attributes:
+  class: StateManager              # verified in classes
+  functions: [load, save, list]    # verified in defined functions
+  entities: [Resource, State]      # verified in classes/interfaces/types/enums
+  exports: [WorkerRatingModal]     # verified in exports (TS/JS)
+  imports: [useState, useEffect]   # verified in imports
+  commands: [init, plan, refresh]  # substring match in functions
+  strategies: [explicit_files]     # substring match in functions+classes
+```
+
+Supported languages: Python, TypeScript/TSX, JavaScript, Solidity.
 
 ## State File Format
 
@@ -219,16 +382,67 @@ resources:
   "last_updated": "2026-01-27T15:30:00",
   "resources": [
     {
-      "type": "feature",
-      "name": "auth_login",
+      "type": "module",
+      "name": "inference",
       "status": "implemented",
-      "files": ["src/auth.py"],
-      "tests": ["tests/test_auth.py"],
-      "created_at": "2026-01-27T14:00:00"
+      "files": ["src/terra4mice/inference.py"],
+      "symbols": {
+        "InferenceEngine": {
+          "name": "InferenceEngine",
+          "kind": "class",
+          "status": "implemented",
+          "line_start": 94,
+          "line_end": 686,
+          "file": "src/terra4mice/inference.py"
+        },
+        "format_report": {
+          "name": "format_report",
+          "kind": "function",
+          "status": "missing"
+        }
+      }
     }
   ]
 }
 ```
+
+## Remote State Backend
+
+Store state in S3 with optional DynamoDB locking for team collaboration. Add a `backend:` section to your spec:
+
+```yaml
+# terra4mice.spec.yaml
+version: "1"
+
+backend:
+  type: s3
+  config:
+    bucket: my-terra4mice-state
+    key: projects/myapp/terra4mice.state.json
+    region: us-east-1
+    lock_table: terra4mice-locks    # DynamoDB table (optional)
+    profile: my-aws-profile         # AWS profile (optional)
+    encrypt: true                   # S3 SSE (optional)
+
+resources:
+  # ... your spec unchanged ...
+```
+
+Without `backend:` or with `type: local`, behavior is unchanged (local file).
+
+### DynamoDB Lock Table Setup
+
+```bash
+aws dynamodb create-table \
+  --table-name terra4mice-locks \
+  --attribute-definitions AttributeName=LockID,AttributeType=S \
+  --key-schema AttributeName=LockID,KeyType=HASH \
+  --billing-mode PAY_PER_REQUEST
+```
+
+### How Locking Works
+
+When a `backend` with `lock_table` is configured, mutating commands (`refresh`, `mark`, `lock`, `unlock`, `state rm`, `state push`) automatically acquire a DynamoDB lock before writing. If another process holds the lock, the command fails with a descriptive error showing who holds it and when it was acquired.
 
 ## CI/CD Integration
 
@@ -246,21 +460,48 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: pip install terra4mice
+      - run: pip install terra4mice[ast]
       - run: terra4mice plan --detailed-exitcode
         # Returns 2 if there are pending changes
 ```
 
-## Filosofía
+## Roadmap
 
-1. **Estado antes que intención** - Lo que existe, no lo que queremos
-2. **Evidencia antes que percepción** - Tests, no "creo que funciona"
-3. **Convergencia antes que velocidad** - Mejor lento y correcto
-4. **Claridad antes que heroísmo** - Plan visible, no magia
+| Phase | Status | Description |
+|-------|--------|-------------|
+| 1 - MVP CLI | DONE | init, plan, refresh, state, mark, apply, ci, diff |
+| 2 - tree-sitter AST | DONE | Multi-language deep analysis, spec attribute verification, symbol tracking |
+| 3 - Multi-AI Contexts | PLANNED | Track which AI (Claude, Codex, Kimi) has context on what |
+| 4 - CI/CD Integration | DONE | GitHub Action, PR comments, convergence badges |
+| 4.5 - Remote State | DONE | S3 backend, DynamoDB locking, state pull/push, migrate-state |
+| 5 - Apply Runner | PLANNED | Interactive apply loop, agent integration |
+| 6 - Ecosystem Rollout | PLANNED | Deploy across Ultravioleta DAO projects |
 
-## Definición de Completo
+### Phase 3: Multi-AI Context Tracking (Next)
 
-Un proyecto está completo cuando:
+When multiple AIs work on the same project, each carries its own isolated context. Phase 3 adds a **context registry** to know which AI has context on what:
+
+```bash
+terra4mice contexts list
+# AGENT          RESOURCE              LAST SEEN    STATUS
+# claude-code    module.inference      2min ago     active
+# codex          feature.auth_login    1hr ago      stale
+# kimi-2.5       feature.frontend      30min ago    active
+
+terra4mice mark module.auth implemented --agent=codex
+terra4mice contexts sync --from=claude-code --to=codex
+```
+
+## Philosophy
+
+1. **State before intention** - What exists, not what we want
+2. **Evidence before perception** - Tests, not "I think it works"
+3. **Convergence before speed** - Better slow and correct
+4. **Clarity before heroism** - Visible plan, not magic
+
+## Definition of Done
+
+A project is complete when:
 
 ```
 $ terra4mice plan
@@ -268,7 +509,7 @@ $ terra4mice plan
 No changes. State matches spec.
 ```
 
-Nada más.
+Nothing else.
 
 ## License
 

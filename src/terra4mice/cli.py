@@ -12,12 +12,20 @@ Usage:
     terra4mice state pull          Download remote state to local file
     terra4mice state push          Upload local state to remote backend
     terra4mice mark                Mark a resource as created/partial/broken
+    terra4mice mark --agent X      Mark and track context for agent X
     terra4mice mark --lock         Mark and lock (survives refresh)
     terra4mice lock                Lock a resource (prevent refresh overwrite)
     terra4mice unlock              Unlock a resource (allow refresh)
     terra4mice apply               Interactive apply loop
     terra4mice ci                  Run refresh + plan in CI mode
     terra4mice force-unlock ID     Force-release a stuck state lock
+    
+    # Multi-agent context tracking
+    terra4mice contexts list                    List all agents and contexts
+    terra4mice contexts show <agent>            Show agent's context details
+    terra4mice contexts sync --from A --to B    Sync contexts between agents
+    terra4mice contexts export -a <agent> -o F  Export agent context to file
+    terra4mice contexts import -i <file>        Import context from file
 """
 
 import sys
@@ -32,6 +40,33 @@ from .planner import generate_plan, format_plan, check_dependencies
 from .models import ResourceStatus
 from .inference import InferenceEngine, InferenceConfig, format_inference_report
 from .ci import format_plan_json, format_plan_markdown, strip_ansi
+from .contexts import ContextRegistry, infer_agent_from_env
+from .context_io import (
+    export_agent_context, import_handoff, sync_contexts,
+    ContextHandoff, MergeStrategy
+)
+
+DEFAULT_CONTEXTS_FILE = "terra4mice.contexts.json"
+
+
+def _load_context_registry(args) -> ContextRegistry:
+    """Load context registry from file or create new one."""
+    contexts_path = getattr(args, "contexts", None) or DEFAULT_CONTEXTS_FILE
+    path = Path.cwd() / contexts_path
+    
+    if path.exists():
+        try:
+            return ContextRegistry.from_json(path.read_text(encoding="utf-8"))
+        except Exception:
+            return ContextRegistry()
+    return ContextRegistry()
+
+
+def _save_context_registry(registry: ContextRegistry, args) -> None:
+    """Save context registry to file."""
+    contexts_path = getattr(args, "contexts", None) or DEFAULT_CONTEXTS_FILE
+    path = Path.cwd() / contexts_path
+    path.write_text(registry.to_json(), encoding="utf-8")
 
 
 def _create_state_manager(args) -> StateManager:
@@ -363,6 +398,23 @@ def cmd_mark(args):
                 return 1
 
             sm.save()
+
+            # Track context if --agent is provided
+            agent = getattr(args, 'agent', None) or infer_agent_from_env()
+            if agent:
+                registry = _load_context_registry(args)
+                knowledge = []
+                if args.reason:
+                    knowledge.append(args.reason)
+                registry.register_context(
+                    agent=agent,
+                    resource=address,
+                    files_touched=files,
+                    knowledge=knowledge,
+                    contributed_status=status,
+                )
+                _save_context_registry(registry, args)
+                print(f"Context tracked for agent: {agent}")
 
             lock_indicator = " (locked)" if resource.locked else ""
             print(f"Marked {resource.address} as {resource.status.value}{lock_indicator}")
@@ -723,6 +775,308 @@ def cmd_state_push(args):
         return 1
 
 
+def cmd_contexts_list(args):
+    """List all agents and their contexts."""
+    registry = _load_context_registry(args)
+    
+    agents = registry.list_agents()
+    contexts = registry.list_all()
+    
+    if not contexts and not agents:
+        print("No contexts tracked yet.")
+        print("Use 'terra4mice mark --agent=<agent> <address>' to track context.")
+        return 0
+    
+    # Group contexts by agent
+    by_agent: dict = {}
+    for entry in contexts:
+        if entry.agent not in by_agent:
+            by_agent[entry.agent] = []
+        by_agent[entry.agent].append(entry)
+    
+    # Also include agents with no contexts
+    for agent in agents:
+        if agent.id not in by_agent:
+            by_agent[agent.id] = []
+    
+    verbose = getattr(args, 'verbose', False)
+    
+    for agent_id in sorted(by_agent.keys()):
+        entries = by_agent[agent_id]
+        profile = registry.get_agent(agent_id)
+        
+        # Header
+        model_str = f" ({profile.model})" if profile and profile.model else ""
+        print(f"\033[1m{agent_id}\033[0m{model_str}")
+        
+        if not entries:
+            print("  (no contexts)")
+        else:
+            for entry in sorted(entries, key=lambda e: e.timestamp, reverse=True):
+                status = entry.status()
+                status_color = {
+                    "active": "\033[32m",   # Green
+                    "stale": "\033[33m",    # Yellow
+                    "expired": "\033[90m",  # Gray
+                }
+                color = status_color.get(status.value, "")
+                reset = "\033[0m"
+                
+                age = entry.age_str()
+                conf = f" conf={entry.confidence:.1f}" if verbose else ""
+                print(f"  {color}{entry.resource}{reset} [{status.value}] {age}{conf}")
+                
+                if verbose and entry.files_touched:
+                    print(f"    files: {', '.join(entry.files_touched)}")
+                if verbose and entry.knowledge:
+                    for k in entry.knowledge[:2]:  # Limit to 2 knowledge items
+                        print(f"    - {k}")
+        print()
+    
+    # Summary
+    summary = registry.coverage_summary()
+    print(f"Summary: {summary['active']} active, {summary['stale']} stale, {summary['expired']} expired")
+    
+    return 0
+
+
+def cmd_contexts_show(args):
+    """Show detailed view of an agent's context."""
+    registry = _load_context_registry(args)
+    agent_id = args.agent
+    
+    profile = registry.get_agent(agent_id)
+    entries = registry.get_agent_contexts(agent_id)
+    
+    if not profile and not entries:
+        print(f"Agent not found: {agent_id}")
+        return 1
+    
+    # Agent header
+    print(f"# Agent: {agent_id}")
+    if profile:
+        if profile.name and profile.name != agent_id:
+            print(f"name       = \"{profile.name}\"")
+        if profile.model:
+            print(f"model      = \"{profile.model}\"")
+        if profile.platform:
+            print(f"platform   = \"{profile.platform}\"")
+        if profile.capabilities:
+            print(f"capabilities = {profile.capabilities}")
+        if profile.last_seen:
+            print(f"last_seen  = \"{profile.last_seen.isoformat()}\"")
+        if profile.current_session:
+            print(f"session    = \"{profile.current_session}\"")
+    
+    print()
+    print(f"## Resources ({len(entries)})")
+    print()
+    
+    for entry in sorted(entries, key=lambda e: e.timestamp, reverse=True):
+        status = entry.status()
+        status_color = {
+            "active": "\033[32m",   # Green
+            "stale": "\033[33m",    # Yellow
+            "expired": "\033[90m",  # Gray
+        }
+        color = status_color.get(status.value, "")
+        reset = "\033[0m"
+        
+        print(f"### {entry.resource}")
+        print(f"  status     = {color}{status.value}{reset}")
+        print(f"  confidence = {entry.confidence}")
+        print(f"  timestamp  = {entry.timestamp.isoformat()}")
+        print(f"  age        = {entry.age_str()}")
+        
+        if entry.files_touched:
+            print(f"  files      = {entry.files_touched}")
+        if entry.knowledge:
+            print(f"  knowledge:")
+            for k in entry.knowledge:
+                print(f"    - {k}")
+        if entry.contributed_status:
+            print(f"  contributed_status = \"{entry.contributed_status}\"")
+        print()
+    
+    return 0
+
+
+def cmd_contexts_sync(args):
+    """Sync contexts from one agent to another."""
+    registry = _load_context_registry(args)
+    sm = _create_state_manager(args)
+    sm.load()
+    
+    from_agent = args.from_agent
+    to_agent = args.to_agent
+    
+    # Validate agents exist
+    from_contexts = registry.get_agent_contexts(from_agent)
+    if not from_contexts:
+        print(f"Error: No contexts found for agent '{from_agent}'")
+        return 1
+    
+    # Optional resource filter
+    resources = None
+    if args.resources:
+        resources = [r.strip() for r in args.resources.split(",")]
+    
+    confidence_decay = getattr(args, 'decay', 0.1)
+    
+    result = sync_contexts(
+        registry=registry,
+        state=sm.state,
+        from_agent=from_agent,
+        to_agent=to_agent,
+        resources=resources,
+        confidence_decay=confidence_decay,
+    )
+    
+    _save_context_registry(registry, args)
+    
+    print(f"Synced contexts from '{from_agent}' to '{to_agent}'")
+    print(f"  Imported: {result.imported_count}")
+    print(f"  Skipped:  {result.skipped_count}")
+    
+    if result.conflicts:
+        print()
+        print("\033[33mWarning: Potential conflicts detected:\033[0m")
+        for c in result.conflicts:
+            print(f"  - {c['resource']}: {c['warning']}")
+    
+    if getattr(args, 'verbose', False) and result.messages:
+        print()
+        print("Details:")
+        for msg in result.messages:
+            print(f"  {msg}")
+    
+    return 0
+
+
+def cmd_contexts_export(args):
+    """Export agent context to file."""
+    registry = _load_context_registry(args)
+    sm = _create_state_manager(args)
+    sm.load()
+    
+    agent = args.agent
+    
+    # Validate agent has contexts
+    entries = registry.get_agent_contexts(agent)
+    if not entries:
+        print(f"Error: No contexts found for agent '{agent}'")
+        return 1
+    
+    # Build handoff
+    notes = getattr(args, 'notes', '') or ''
+    recommendations = []
+    if args.recommend:
+        recommendations = [r.strip() for r in args.recommend.split(",")]
+    
+    include_state = getattr(args, 'include_state', False)
+    
+    handoff = export_agent_context(
+        registry=registry,
+        state=sm.state,
+        agent=agent,
+        project=getattr(args, 'project', '') or '',
+        include_state=include_state,
+        notes=notes,
+        recommendations=recommendations,
+        to_agent=getattr(args, 'to', None),
+    )
+    
+    # Output
+    output_path = Path(args.output)
+    handoff.save(output_path)
+    
+    print(f"Exported context for '{agent}' to {output_path}")
+    print(f"  Resources: {len(handoff.resources)}")
+    if handoff.notes:
+        print(f"  Notes: {handoff.notes[:50]}...")
+    
+    return 0
+
+
+def cmd_contexts_import(args):
+    """Import context from handoff file."""
+    registry = _load_context_registry(args)
+    
+    input_path = Path(args.input)
+    if not input_path.exists():
+        print(f"Error: File not found: {input_path}")
+        return 1
+    
+    try:
+        handoff = ContextHandoff.load(input_path)
+    except Exception as e:
+        print(f"Error loading handoff: {e}")
+        return 1
+    
+    # Determine importing agent
+    agent = args.agent or infer_agent_from_env()
+    if not agent:
+        print("Error: Could not determine importing agent.")
+        print("Use --agent=<agent-id> or set AI_AGENT_ID environment variable.")
+        return 1
+    
+    # Determine merge strategy
+    strategy_map = {
+        "merge": MergeStrategy.MERGE,
+        "replace": MergeStrategy.REPLACE,
+        "skip": MergeStrategy.SKIP_EXISTING,
+    }
+    strategy_name = getattr(args, 'strategy', 'merge') or 'merge'
+    strategy = strategy_map.get(strategy_name, MergeStrategy.MERGE)
+    
+    confidence_decay = getattr(args, 'decay', 0.1)
+    
+    result = import_handoff(
+        registry=registry,
+        handoff=handoff,
+        importing_agent=agent,
+        merge_strategy=strategy,
+        confidence_decay=confidence_decay,
+    )
+    
+    _save_context_registry(registry, args)
+    
+    print(f"Imported handoff from '{handoff.from_agent}' as '{agent}'")
+    print(f"  Imported: {result.imported_count}")
+    print(f"  Skipped:  {result.skipped_count}")
+    
+    if handoff.notes:
+        print()
+        print(f"Notes from {handoff.from_agent}:")
+        print(f"  {handoff.notes}")
+    
+    if handoff.recommendations:
+        print()
+        print("Recommendations:")
+        for rec in handoff.recommendations:
+            print(f"  - {rec}")
+    
+    if handoff.warnings:
+        print()
+        print("\033[33mWarnings:\033[0m")
+        for warn in handoff.warnings:
+            print(f"  - {warn}")
+    
+    if result.conflicts:
+        print()
+        print("\033[33mPotential conflicts:\033[0m")
+        for c in result.conflicts:
+            print(f"  - {c['resource']}: {c['warning']}")
+    
+    if getattr(args, 'verbose', False) and result.messages:
+        print()
+        print("Details:")
+        for msg in result.messages:
+            print(f"  {msg}")
+    
+    return 0
+
+
 def cmd_force_unlock(args):
     """Force-release a stuck state lock."""
     sm = _create_state_manager(args)
@@ -879,6 +1233,9 @@ def main():
     mark_parser.add_argument("--lock", "-l", action="store_true",
                             help="Lock resource to prevent refresh from overwriting")
     mark_parser.add_argument("--state", default=None, help="Path to state file")
+    mark_parser.add_argument("--agent", "-a", default=None,
+                            help="Agent ID for context tracking (auto-detected if not set)")
+    mark_parser.add_argument("--contexts", default=None, help="Path to contexts file")
 
     # lock
     lock_parser = subparsers.add_parser("lock", help="Lock resource (prevent refresh overwrite)")
@@ -910,6 +1267,62 @@ def main():
                                help="Show plan after refresh")
     refresh_parser.add_argument("--parallelism", type=int, default=0,
                                help="Number of parallel workers (0=auto, 1=sequential)")
+
+    # contexts
+    contexts_parser = subparsers.add_parser("contexts", help="Multi-agent context tracking")
+    contexts_subparsers = contexts_parser.add_subparsers(dest="contexts_command")
+
+    # contexts list
+    contexts_list = contexts_subparsers.add_parser("list", help="List all agents and their contexts")
+    contexts_list.add_argument("--contexts", default=None, help="Path to contexts file")
+    contexts_list.add_argument("--verbose", "-v", action="store_true", help="Show details")
+
+    # contexts show
+    contexts_show = contexts_subparsers.add_parser("show", help="Show detailed view of agent context")
+    contexts_show.add_argument("agent", help="Agent ID to show")
+    contexts_show.add_argument("--contexts", default=None, help="Path to contexts file")
+
+    # contexts sync
+    contexts_sync = contexts_subparsers.add_parser("sync", help="Sync contexts between agents")
+    contexts_sync.add_argument("--from", dest="from_agent", required=True,
+                              help="Source agent ID")
+    contexts_sync.add_argument("--to", dest="to_agent", required=True,
+                              help="Target agent ID")
+    contexts_sync.add_argument("--resources", default=None,
+                              help="Specific resources to sync (comma-separated)")
+    contexts_sync.add_argument("--decay", type=float, default=0.1,
+                              help="Confidence decay on sync (default: 0.1)")
+    contexts_sync.add_argument("--contexts", default=None, help="Path to contexts file")
+    contexts_sync.add_argument("--spec", default=None, help="Path to spec file")
+    contexts_sync.add_argument("--state", default=None, help="Path to state file")
+    contexts_sync.add_argument("--verbose", "-v", action="store_true", help="Show details")
+
+    # contexts export
+    contexts_export = contexts_subparsers.add_parser("export", help="Export agent context to file")
+    contexts_export.add_argument("--agent", "-a", required=True, help="Agent ID to export")
+    contexts_export.add_argument("-o", "--output", required=True, help="Output file path")
+    contexts_export.add_argument("--project", default=None, help="Project name")
+    contexts_export.add_argument("--notes", default=None, help="Handoff notes")
+    contexts_export.add_argument("--recommend", default=None,
+                                help="Recommendations (comma-separated)")
+    contexts_export.add_argument("--to", default=None, help="Target agent (optional)")
+    contexts_export.add_argument("--include-state", action="store_true",
+                                help="Include state snapshot in export")
+    contexts_export.add_argument("--contexts", default=None, help="Path to contexts file")
+    contexts_export.add_argument("--spec", default=None, help="Path to spec file")
+    contexts_export.add_argument("--state", default=None, help="Path to state file")
+
+    # contexts import
+    contexts_import = contexts_subparsers.add_parser("import", help="Import context from file")
+    contexts_import.add_argument("-i", "--input", required=True, help="Input file path")
+    contexts_import.add_argument("--agent", "-a", default=None,
+                                help="Importing agent ID (auto-detected if not set)")
+    contexts_import.add_argument("--strategy", choices=["merge", "replace", "skip"],
+                                default="merge", help="Merge strategy (default: merge)")
+    contexts_import.add_argument("--decay", type=float, default=0.1,
+                                help="Confidence decay on import (default: 0.1)")
+    contexts_import.add_argument("--contexts", default=None, help="Path to contexts file")
+    contexts_import.add_argument("--verbose", "-v", action="store_true", help="Show details")
 
     # diff
     diff_parser = subparsers.add_parser("diff", help="Show changes between two state files")
@@ -965,6 +1378,27 @@ def main():
         return cmd_apply(args)
     elif args.command == "refresh":
         return cmd_refresh(args)
+    elif args.command == "contexts":
+        if args.contexts_command == "list":
+            return cmd_contexts_list(args)
+        elif args.contexts_command == "show":
+            return cmd_contexts_show(args)
+        elif args.contexts_command == "sync":
+            return cmd_contexts_sync(args)
+        elif args.contexts_command == "export":
+            return cmd_contexts_export(args)
+        elif args.contexts_command == "import":
+            return cmd_contexts_import(args)
+        else:
+            print("Usage: terra4mice contexts <command>")
+            print()
+            print("Commands:")
+            print("  list    List all agents and their contexts")
+            print("  show    Show detailed view of agent context")
+            print("  sync    Sync contexts between agents")
+            print("  export  Export agent context to file")
+            print("  import  Import context from file")
+            return 0
     elif args.command == "diff":
         return cmd_diff(args)
     elif args.command == "force-unlock":

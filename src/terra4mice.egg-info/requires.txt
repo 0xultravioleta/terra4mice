@@ -1,7 +1,17 @@
 pyyaml>=6.0
 
+[all]
+terra4mice[ast,dev,remote]
+
+[ast]
+tree-sitter>=0.23.0
+tree-sitter-language-pack>=0.4.0
+
 [dev]
 pytest>=7.0
 pytest-cov
 black
 mypy
+
+[remote]
+boto3>=1.26.0
