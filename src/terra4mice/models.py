@@ -20,8 +20,6 @@ class SymbolStatus:
     name: str
     kind: str  # "function", "class", "method", "interface", "type", "enum"
     status: str = "implemented"  # "implemented" | "missing"
-    line_start: int = 0
-    line_end: int = 0
     parent: str = ""  # "ClassName" for methods
     file: str = ""
 

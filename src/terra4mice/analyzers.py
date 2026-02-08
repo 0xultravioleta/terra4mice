@@ -46,8 +46,6 @@ class SymbolInfo:
 
     name: str
     kind: str  # "function", "class", "method", "interface", "type", "enum"
-    line_start: int
-    line_end: int
     parent: str = ""  # "ClassName" for methods, empty for top-level
     file: str = ""
 
@@ -134,23 +132,14 @@ def _extract_names(captures: Dict[str, list], name_key: str) -> Set[str]:
 def _extract_symbols(
     captures: Dict[str, list], name_key: str, kind: str, file: str = ""
 ) -> List[SymbolInfo]:
-    """Extract SymbolInfo with line numbers from captured nodes."""
+    """Extract SymbolInfo from captured nodes."""
     symbols = []
     for node in captures.get(name_key, []):
         text = node.text
         if isinstance(text, bytes):
             text = text.decode("utf-8", errors="replace")
-        # Use the parent node (e.g. function_definition) for line range
-        def_node = node.parent
-        if def_node:
-            line_start = def_node.start_point[0] + 1
-            line_end = def_node.end_point[0] + 1
-        else:
-            line_start = node.start_point[0] + 1
-            line_end = line_start
         symbols.append(SymbolInfo(
             name=text, kind=kind,
-            line_start=line_start, line_end=line_end,
             file=file,
         ))
     return symbols
@@ -159,13 +148,14 @@ def _extract_symbols(
 def _assign_parents(
     functions: List[SymbolInfo], classes: List[SymbolInfo]
 ) -> List[SymbolInfo]:
-    """Assign parent class to methods based on line ranges."""
-    for func in functions:
-        for cls in classes:
-            if cls.line_start <= func.line_start <= cls.line_end:
-                func.parent = cls.name
-                func.kind = "method"
-                break
+    """
+    Assign parent class to methods.
+
+    Note: Without line numbers, we cannot determine parent-child relationships
+    based on nesting. Future versions may use AST structure directly.
+    For now, all functions are treated as top-level.
+    """
+    # No-op: parent assignment requires line number or AST traversal
     return functions
 
 

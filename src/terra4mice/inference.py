@@ -431,7 +431,6 @@ class InferenceEngine:
         2. stdlib ast (Python only)
         3. regex (Solidity)
         4. regex (TypeScript/JavaScript)
-        5. size heuristic (config/docs)
 
         Returns confidence score 0.0 to 1.0
         """
@@ -478,8 +477,6 @@ class InferenceEngine:
                                     name=sym_info.name,
                                     kind=sym_info.kind,
                                     status="implemented",
-                                    line_start=sym_info.line_start,
-                                    line_end=sym_info.line_end,
                                     parent=sym_info.parent,
                                     file=file_path,
                                 )
@@ -511,11 +508,8 @@ class InferenceEngine:
                 score = self._score_typescript_fallback(source_text, resource)
                 total_score += score
                 analyzed += 1
-            elif file_path.endswith(('.md', '.yaml', '.yml', '.toml', '.json')):
-                # For config/doc files, just check they have content
-                if len(source_bytes) > 50:
-                    total_score += 0.5
-                    analyzed += 1
+            # Note: config/doc files (.md, .yaml, .json) are no longer scored
+            # They don't provide reliable evidence of implementation
 
         if analyzed == 0:
             return 0.0

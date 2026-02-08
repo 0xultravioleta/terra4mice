@@ -46,25 +46,25 @@ if HAS_TREE_SITTER:
 # ---------------------------------------------------------------------------
 class TestSymbolInfo:
     def test_qualified_name_top_level(self):
-        sym = SymbolInfo(name="my_func", kind="function", line_start=1, line_end=5)
+        sym = SymbolInfo(name="my_func", kind="function")
         assert sym.qualified_name == "my_func"
 
     def test_qualified_name_with_parent(self):
         sym = SymbolInfo(
-            name="my_method", kind="method", line_start=10, line_end=15,
+            name="my_method", kind="method",
             parent="MyClass",
         )
         assert sym.qualified_name == "MyClass.my_method"
 
     def test_file_field(self):
         sym = SymbolInfo(
-            name="f", kind="function", line_start=1, line_end=1,
+            name="f", kind="function",
             file="src/foo.py",
         )
         assert sym.file == "src/foo.py"
 
     def test_default_parent_empty(self):
-        sym = SymbolInfo(name="f", kind="function", line_start=1, line_end=1)
+        sym = SymbolInfo(name="f", kind="function")
         assert sym.parent == ""
 
 
@@ -94,7 +94,7 @@ class TestSymbolStatus:
 # ---------------------------------------------------------------------------
 @pytest.mark.skipif(not HAS_TREE_SITTER, reason="tree-sitter not installed")
 class TestExtractSymbols:
-    def test_python_functions_have_lines(self):
+    def test_python_functions_extracted(self):
         source = b"""def hello():
     pass
 
@@ -107,14 +107,12 @@ def world():
         assert "hello" in func_names
         assert "world" in func_names
 
-        # Check line numbers
+        # Check basic properties
         hello_sym = next(s for s in result.symbols if s.name == "hello")
-        assert hello_sym.line_start == 1
-        assert hello_sym.line_end == 2
         assert hello_sym.kind == "function"
         assert hello_sym.file == "test.py"
 
-    def test_python_classes_have_lines(self):
+    def test_python_classes_extracted(self):
         source = b"""class Foo:
     def bar(self):
         pass
@@ -126,7 +124,6 @@ def world():
         class_syms = [s for s in result.symbols if s.kind == "class"]
         assert len(class_syms) == 1
         assert class_syms[0].name == "Foo"
-        assert class_syms[0].line_start == 1
 
     def test_file_path_propagated(self):
         source = b"def f(): pass"
@@ -144,7 +141,11 @@ def world():
 # ---------------------------------------------------------------------------
 @pytest.mark.skipif(not HAS_TREE_SITTER, reason="tree-sitter not installed")
 class TestAssignParents:
-    def test_methods_get_parent(self):
+    def test_symbols_extracted_without_parent_assignment(self):
+        """
+        Note: Without line numbers, parent assignment is disabled.
+        All functions/methods are treated as top-level symbols.
+        """
         source = b"""class Engine:
     def start(self):
         pass
@@ -156,44 +157,28 @@ def standalone():
     pass
 """
         result = analyze_python(source)
-        methods = [s for s in result.symbols if s.kind == "method"]
-        assert len(methods) == 2
-        assert all(m.parent == "Engine" for m in methods)
+        # We still extract the symbols
+        func_names = {s.name for s in result.symbols}
+        assert "start" in func_names
+        assert "stop" in func_names
+        assert "standalone" in func_names
+        assert "Engine" in func_names
 
-        standalone = next(s for s in result.symbols if s.name == "standalone")
-        assert standalone.kind == "function"
-        assert standalone.parent == ""
-
-    def test_nested_classes(self):
-        source = b"""class Outer:
-    def outer_method(self):
-        pass
-
-    class Inner:
-        def inner_method(self):
-            pass
-
-def top_level():
-    pass
-"""
-        result = analyze_python(source)
-        top = next(s for s in result.symbols if s.name == "top_level")
-        assert top.parent == ""
-        assert top.kind == "function"
-
-    def test_assign_parents_direct(self):
+    def test_assign_parents_noop(self):
+        """_assign_parents is now a no-op without line numbers."""
         funcs = [
-            SymbolInfo(name="method1", kind="function", line_start=3, line_end=5),
-            SymbolInfo(name="standalone", kind="function", line_start=10, line_end=12),
+            SymbolInfo(name="method1", kind="function"),
+            SymbolInfo(name="standalone", kind="function"),
         ]
         classes = [
-            SymbolInfo(name="MyClass", kind="class", line_start=1, line_end=8),
+            SymbolInfo(name="MyClass", kind="class"),
         ]
-        _assign_parents(funcs, classes)
-        assert funcs[0].parent == "MyClass"
-        assert funcs[0].kind == "method"
-        assert funcs[1].parent == ""
-        assert funcs[1].kind == "function"
+        result = _assign_parents(funcs, classes)
+        # Function returns the list unchanged
+        assert len(result) == 2
+        # No parent assignment happens
+        assert result[0].parent == ""
+        assert result[1].parent == ""
 
 
 # ---------------------------------------------------------------------------
@@ -225,7 +210,11 @@ interface Config {
         assert "arrowFn" in names
         assert "Config" in names
 
-    def test_ts_methods_have_parent(self):
+    def test_ts_methods_extracted(self):
+        """
+        Note: Without line numbers, parent assignment is disabled.
+        Methods are extracted but without parent linkage.
+        """
         source = b"""
 class Api {
     fetch(): void {}
@@ -233,9 +222,10 @@ class Api {
 }
 """
         result = analyze_typescript(source)
-        methods = [s for s in result.symbols if s.kind == "method"]
-        assert len(methods) == 2
-        assert all(m.parent == "Api" for m in methods)
+        func_names = {s.name for s in result.symbols}
+        assert "fetch" in func_names
+        assert "save" in func_names
+        assert "Api" in func_names
 
 
 # ---------------------------------------------------------------------------
@@ -289,12 +279,12 @@ class TestSymbolStateSerialization:
         resource.symbols = {
             "InferenceEngine": SymbolStatus(
                 name="InferenceEngine", kind="class",
-                status="implemented", line_start=94, line_end=686,
+                status="implemented",
                 file="src/terra4mice/inference.py",
             ),
             "InferenceEngine.infer_all": SymbolStatus(
                 name="infer_all", kind="method",
-                status="implemented", line_start=154, line_end=178,
+                status="implemented",
                 parent="InferenceEngine",
                 file="src/terra4mice/inference.py",
             ),
@@ -313,7 +303,6 @@ class TestSymbolStateSerialization:
         assert loaded is not None
         assert len(loaded.symbols) == 3
         assert loaded.symbols["InferenceEngine"].kind == "class"
-        assert loaded.symbols["InferenceEngine"].line_start == 94
         assert loaded.symbols["InferenceEngine.infer_all"].parent == "InferenceEngine"
         assert loaded.symbols["InferenceEngine.infer_all"].kind == "method"
         assert loaded.symbols["format_report"].status == "missing"
@@ -474,11 +463,10 @@ class TestSymbolDisplay:
             symbols={
                 "InferenceEngine": SymbolStatus(
                     name="InferenceEngine", kind="class", status="implemented",
-                    line_start=94, line_end=686,
                 ),
                 "InferenceEngine.infer_all": SymbolStatus(
                     name="infer_all", kind="method", status="implemented",
-                    parent="InferenceEngine", line_start=154, line_end=178,
+                    parent="InferenceEngine",
                 ),
                 "format_report": SymbolStatus(
                     name="format_report", kind="function", status="missing",
@@ -532,11 +520,11 @@ class TestSymbolDisplay:
             symbols={
                 "Engine": SymbolStatus(
                     name="Engine", kind="class", status="implemented",
-                    line_start=1, line_end=50, file="engine.py",
+                    file="engine.py",
                 ),
                 "Engine.run": SymbolStatus(
                     name="run", kind="method", status="implemented",
-                    parent="Engine", line_start=5, line_end=20, file="engine.py",
+                    parent="Engine", file="engine.py",
                 ),
                 "missing_fn": SymbolStatus(
                     name="missing_fn", kind="function", status="missing",

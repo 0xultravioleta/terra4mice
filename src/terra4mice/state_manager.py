@@ -304,8 +304,6 @@ class StateManager:
                     name=sym_data["name"],
                     kind=sym_data["kind"],
                     status=sym_data.get("status", "implemented"),
-                    line_start=sym_data.get("line_start", 0),
-                    line_end=sym_data.get("line_end", 0),
                     parent=sym_data.get("parent", ""),
                     file=sym_data.get("file", ""),
                 )
@@ -337,8 +335,6 @@ class StateManager:
                         "name": sym.name,
                         "kind": sym.kind,
                         "status": sym.status,
-                        "line_start": sym.line_start,
-                        "line_end": sym.line_end,
                         "parent": sym.parent,
                         "file": sym.file,
                     }

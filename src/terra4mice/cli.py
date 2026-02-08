@@ -344,9 +344,8 @@ def cmd_state_show(args):
         print(f"symbols  = {total} ({implemented} implemented, {missing_count} missing)")
         for qname, sym in sorted(resource.symbols.items()):
             status_indicator = "" if sym.status == "implemented" else " [MISSING]"
-            loc = f"lines {sym.line_start}-{sym.line_end}" if sym.line_start else ""
             file_info = f" ({sym.file})" if sym.file else ""
-            print(f"  {qname:<35} {sym.kind:<10} {loc}{file_info}{status_indicator}")
+            print(f"  {qname:<35} {sym.kind:<10}{file_info}{status_indicator}")
 
     if resource.created_at:
         print(f"created_at = \"{resource.created_at.isoformat()}\"")
