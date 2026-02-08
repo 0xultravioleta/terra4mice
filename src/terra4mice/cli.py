@@ -539,8 +539,30 @@ def cmd_refresh(args):
         return 1
 
 
+def _use_enhanced_apply(args) -> bool:
+    """Determine if we should use the enhanced apply runner."""
+    if getattr(args, "enhanced", False):
+        return True
+    # Any of the new flags activates enhanced mode
+    for flag in ("mode", "agent", "resource", "dry_run",
+                 "require_tests", "auto_commit"):
+        val = getattr(args, flag, None)
+        if val not in (None, False):
+            return True
+    if getattr(args, "parallel", 1) > 1:
+        return True
+    if getattr(args, "timeout", 0) > 0:
+        return True
+    return False
+
+
 def cmd_apply(args):
-    """Interactive apply loop."""
+    """Interactive apply loop (classic or enhanced)."""
+    # ── Enhanced mode ──
+    if _use_enhanced_apply(args):
+        return _cmd_apply_enhanced(args)
+
+    # ── Classic mode (backward-compatible) ──
     try:
         spec = load_spec(args.spec)
     except FileNotFoundError as e:
@@ -602,6 +624,72 @@ def cmd_apply(args):
     print(format_plan(plan))
 
     return 0
+
+
+def _cmd_apply_enhanced(args):
+    """Enhanced apply using ApplyRunner with DAG ordering and context."""
+    from .apply import ApplyRunner, ApplyConfig
+
+    try:
+        spec = load_spec(args.spec)
+    except FileNotFoundError as e:
+        print(f"Error: {e}")
+        return 1
+
+    sm = _create_state_manager(args)
+    sm.load()
+
+    # Load context registry if available
+    context_registry = None
+    try:
+        context_registry = _load_context_registry(args)
+    except Exception:
+        pass
+
+    config = ApplyConfig(
+        mode=getattr(args, "mode", None) or "interactive",
+        agent=getattr(args, "agent", None),
+        parallel=getattr(args, "parallel", 1),
+        timeout_minutes=getattr(args, "timeout", 0),
+        require_tests=getattr(args, "require_tests", False),
+        auto_commit=getattr(args, "auto_commit", False),
+        dry_run=getattr(args, "dry_run", False),
+    )
+
+    errors = config.validate()
+    if errors:
+        for err in errors:
+            print(f"Error: {err}")
+        return 1
+
+    runner = ApplyRunner(
+        spec=spec,
+        state_manager=sm,
+        context_registry=context_registry,
+        config=config,
+    )
+
+    resource_filter = getattr(args, "resource", None)
+
+    try:
+        result = runner.run(resource=resource_filter)
+    except Exception as e:
+        print(f"Error during apply: {e}")
+        return 1
+
+    # Save context registry if we used one
+    if context_registry is not None:
+        try:
+            _save_context_registry(context_registry, args)
+        except Exception:
+            pass
+
+    # Show final plan
+    plan = generate_plan(spec, sm.state)
+    print(format_plan(plan))
+    print(result.summary())
+
+    return 0 if not result.failed else 1
 
 
 def cmd_diff(args):
@@ -1250,6 +1338,27 @@ def main():
     apply_parser = subparsers.add_parser("apply", help="Interactive apply loop")
     apply_parser.add_argument("--spec", default=None, help="Path to spec file")
     apply_parser.add_argument("--state", default=None, help="Path to state file")
+    apply_parser.add_argument("--enhanced", action="store_true",
+                              help="Use enhanced apply mode (DAG ordering, context-aware)")
+    apply_parser.add_argument("--mode", default=None,
+                              choices=["interactive", "auto", "hybrid", "market"],
+                              help="Apply mode (default: interactive)")
+    apply_parser.add_argument("--agent", default=None,
+                              help="Agent ID for context tracking")
+    apply_parser.add_argument("--parallel", type=int, default=1,
+                              help="Max parallel implementations")
+    apply_parser.add_argument("--timeout", type=int, default=0,
+                              help="Timeout in minutes (0=no timeout)")
+    apply_parser.add_argument("--require-tests", action="store_true",
+                              help="Require tests before marking implemented")
+    apply_parser.add_argument("--auto-commit", action="store_true",
+                              help="Git commit after each resource")
+    apply_parser.add_argument("--dry-run", action="store_true",
+                              help="Show plan without executing")
+    apply_parser.add_argument("--resource", default=None,
+                              help="Apply only a specific resource address")
+    apply_parser.add_argument("--contexts", default=None,
+                              help="Path to contexts file")
 
     # refresh (auto-inference)
     refresh_parser = subparsers.add_parser("refresh", help="Auto-detect resources from codebase")
