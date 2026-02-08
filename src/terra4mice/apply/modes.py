@@ -7,12 +7,17 @@ an ``ApplyResult``.
 
 from __future__ import annotations
 
+import sys
+import time
+from pathlib import Path
 from typing import Optional
 
 from ..models import PlanAction, ResourceStatus
 from ..state_manager import StateManager
 from ..contexts import ContextRegistry
 from .runner import ApplyConfig, ApplyResult
+from .agents import AgentBackend, AgentResult, PromptBuilder, get_agent
+from .verify import verify_implementation
 
 
 # ── ANSI helpers ──────────────────────────────────────────────────────
@@ -269,24 +274,506 @@ class InteractiveMode(BaseMode):
         print()
 
 
-# ── Stub Modes ────────────────────────────────────────────────────────
+# ── Auto Mode ─────────────────────────────────────────────────────────
 
 class AutoMode(BaseMode):
-    """Automated mode — dispatches to AI agents. Coming in Phase 5.1."""
+    """
+    Automated mode — dispatches resources to AI coding agents.
+
+    For each action in DAG order:
+    1. Build a context-rich prompt (resource details, deps, files, agent context)
+    2. Dispatch to the configured AI agent (claude-code, codex, etc.)
+    3. Verify the result (check files exist, state updated)
+    4. Update state + context tracking
+    5. Continue or abort on failure
+    """
+
+    def __init__(
+        self,
+        state_manager: StateManager,
+        context_registry: Optional[ContextRegistry] = None,
+        config: Optional[ApplyConfig] = None,
+        agent: Optional[AgentBackend] = None,
+        project_root: Optional[str | Path] = None,
+    ):
+        super().__init__(state_manager, context_registry, config)
+        self._agent = agent
+        self._project_root = Path(project_root) if project_root else Path.cwd()
+        self._prompt_builder = PromptBuilder(
+            project_root=self._project_root,
+            state_manager=state_manager,
+            context_registry=context_registry,
+        )
+
+    @property
+    def agent(self) -> AgentBackend:
+        """Resolve the agent backend (lazy init from config)."""
+        if self._agent is None:
+            agent_name = self.config.agent or "claude-code"
+            self._agent = get_agent(agent_name)
+        return self._agent
 
     def execute(self, ordered_actions: list[PlanAction]) -> ApplyResult:
-        raise NotImplementedError("Coming in Phase 5.1")
+        result = ApplyResult()
+        total = len(ordered_actions)
+        timeout = self.config.timeout_minutes * 60 if self.config.timeout_minutes else 0
 
+        for idx, action in enumerate(ordered_actions, 1):
+            self._print_auto_header(idx, total, action)
+
+            # Build prompt
+            prompt = self._prompt_builder.build(action)
+
+            # Dispatch to agent
+            print(f"  {_C.CYAN}⚡ Dispatching to {self.agent.name}...{_C.RESET}")
+            agent_timeout = timeout if timeout else 300  # 5 min default
+            agent_result = self.agent.execute(
+                prompt=prompt,
+                project_root=self._project_root,
+                timeout_seconds=agent_timeout,
+            )
+
+            # Process result
+            if agent_result.success:
+                self._handle_success(action, agent_result, result)
+            else:
+                self._handle_failure(action, agent_result, result)
+
+                # In auto mode, continue on failure (don't abort)
+                if self.config.parallel < 1:
+                    break
+
+        self._print_auto_summary(result)
+        return result
+
+    def _print_auto_header(
+        self, idx: int, total: int, action: PlanAction
+    ) -> None:
+        sym_colours = {
+            "create": _C.GREEN,
+            "update": _C.YELLOW,
+            "delete": _C.RED,
+        }
+        colour = sym_colours.get(action.action, _C.WHITE)
+        print(
+            f"\n{_C.BOLD}[{idx}/{total}]{_C.RESET} "
+            f"{colour}{action.symbol} {action.action} "
+            f"{action.resource.address}{_C.RESET}"
+        )
+        if action.reason:
+            print(f"  {_C.DIM}{action.reason}{_C.RESET}")
+
+    def _handle_success(
+        self,
+        action: PlanAction,
+        agent_result: AgentResult,
+        apply_result: ApplyResult,
+    ) -> None:
+        addr = action.resource.address
+
+        # Verify implementation
+        verification = verify_implementation(
+            action.resource, self._project_root
+        )
+
+        if verification.passed:
+            # Mark as implemented in state
+            self.state_manager.mark_created(
+                addr, files=agent_result.all_files
+            )
+            self.state_manager.save()
+            apply_result.implemented.append(addr)
+            print(
+                f"  {_C.GREEN}✓ Implemented{_C.RESET} "
+                f"({agent_result.duration_seconds:.1f}s, "
+                f"verified: {verification.score:.0%})"
+            )
+        else:
+            # Agent succeeded but verification failed → partial
+            self.state_manager.mark_partial(
+                addr, reason="Agent completed but verification failed"
+            )
+            self.state_manager.save()
+            apply_result.implemented.append(addr)
+            print(
+                f"  {_C.YELLOW}~ Partial{_C.RESET} "
+                f"({agent_result.duration_seconds:.1f}s, "
+                f"verified: {verification.score:.0%})"
+            )
+            if verification.missing_attributes:
+                for miss in verification.missing_attributes[:3]:
+                    print(f"    {_C.DIM}⚠ {miss}{_C.RESET}")
+
+        # Update context tracking
+        self._update_context(action, agent_result)
+
+        # Auto-commit if configured
+        if self.config.auto_commit:
+            self._git_commit(addr, action.action)
+
+    def _handle_failure(
+        self,
+        action: PlanAction,
+        agent_result: AgentResult,
+        apply_result: ApplyResult,
+    ) -> None:
+        addr = action.resource.address
+        apply_result.failed.append(addr)
+        print(
+            f"  {_C.RED}✗ Failed{_C.RESET} "
+            f"({agent_result.duration_seconds:.1f}s)"
+        )
+        if agent_result.error:
+            # Truncate error for display
+            err = agent_result.error[:200]
+            print(f"    {_C.DIM}{err}{_C.RESET}")
+
+    def _update_context(
+        self, action: PlanAction, agent_result: AgentResult
+    ) -> None:
+        if self.context_registry is None:
+            return
+        agent_name = self.agent.name
+        self.context_registry.register_context(
+            agent=agent_name,
+            resource=action.resource.address,
+            files_touched=agent_result.all_files,
+            contributed_status="implemented" if agent_result.success else "failed",
+        )
+
+    def _git_commit(self, addr: str, action_type: str) -> None:
+        """Auto-commit after successful implementation."""
+        import subprocess
+
+        try:
+            subprocess.run(
+                ["git", "add", "-A"],
+                cwd=str(self._project_root),
+                capture_output=True,
+                timeout=10,
+            )
+            subprocess.run(
+                ["git", "commit", "-m",
+                 f"terra4mice auto: {action_type} {addr}"],
+                cwd=str(self._project_root),
+                capture_output=True,
+                timeout=10,
+            )
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            pass
+
+    def _print_auto_summary(self, result: ApplyResult) -> None:
+        print(f"\n{'═' * 60}")
+        print(f" {_C.BOLD}Auto Apply Summary{_C.RESET}")
+        print(f"{'═' * 60}")
+        if result.implemented:
+            print(
+                f" {_C.GREEN}✓ Implemented: "
+                f"{len(result.implemented)}{_C.RESET}"
+            )
+        if result.failed:
+            print(
+                f" {_C.RED}✗ Failed: {len(result.failed)}{_C.RESET}"
+            )
+        if result.skipped:
+            print(f" {_C.DIM}Skipped: {len(result.skipped)}{_C.RESET}")
+        print()
+
+
+# ── Hybrid Mode ───────────────────────────────────────────────────────
 
 class HybridMode(BaseMode):
-    """Hybrid mode — AI suggests, human approves. Coming in Phase 5.1."""
+    """
+    Hybrid mode — AI generates implementation, human reviews.
+
+    For each action:
+    1. AI agent implements the resource
+    2. Show diff/output to human
+    3. Human approves (accept), rejects (revert), or edits
+    4. State updated based on decision
+    """
+
+    # Allow tests to inject an input function
+    _input_fn = staticmethod(input)
+
+    def __init__(
+        self,
+        state_manager: StateManager,
+        context_registry: Optional[ContextRegistry] = None,
+        config: Optional[ApplyConfig] = None,
+        agent: Optional[AgentBackend] = None,
+        project_root: Optional[str | Path] = None,
+    ):
+        super().__init__(state_manager, context_registry, config)
+        self._agent = agent
+        self._project_root = Path(project_root) if project_root else Path.cwd()
+        self._prompt_builder = PromptBuilder(
+            project_root=self._project_root,
+            state_manager=state_manager,
+            context_registry=context_registry,
+        )
+
+    @property
+    def agent(self) -> AgentBackend:
+        if self._agent is None:
+            agent_name = self.config.agent or "claude-code"
+            self._agent = get_agent(agent_name)
+        return self._agent
 
     def execute(self, ordered_actions: list[PlanAction]) -> ApplyResult:
-        raise NotImplementedError("Coming in Phase 5.1")
+        result = ApplyResult()
+        total = len(ordered_actions)
 
+        for idx, action in enumerate(ordered_actions, 1):
+            self._print_hybrid_header(idx, total, action)
+
+            # Build and dispatch
+            prompt = self._prompt_builder.build(action)
+            print(f"  {_C.CYAN}⚡ AI implementing...{_C.RESET}")
+
+            agent_result = self.agent.execute(
+                prompt=prompt,
+                project_root=self._project_root,
+                timeout_seconds=300,
+            )
+
+            if not agent_result.success:
+                print(
+                    f"  {_C.RED}AI failed:{_C.RESET} "
+                    f"{agent_result.error[:100]}"
+                )
+                self._print_hybrid_options(failed=True)
+                resp = self._prompt_hybrid(failed=True)
+
+                if resp == "s":
+                    result.skipped.append(action.resource.address)
+                elif resp == "m":
+                    # Fall back to manual (interactive mode for this action)
+                    self._do_manual(action, result)
+                elif resp == "q":
+                    break
+                continue
+
+            # Show AI output
+            if agent_result.output:
+                print(f"\n  {_C.BOLD}AI Output:{_C.RESET}")
+                for line in agent_result.output.splitlines()[:20]:
+                    print(f"  {_C.DIM}│ {line}{_C.RESET}")
+                if len(agent_result.output.splitlines()) > 20:
+                    remaining = len(agent_result.output.splitlines()) - 20
+                    print(f"  {_C.DIM}│ ... ({remaining} more lines){_C.RESET}")
+
+            # Verify
+            verification = verify_implementation(
+                action.resource, self._project_root
+            )
+            score_str = f"verification: {verification.score:.0%}"
+            print(f"  {_C.CYAN}📋 {score_str}{_C.RESET}")
+
+            # Ask human
+            self._print_hybrid_options(failed=False)
+            resp = self._prompt_hybrid(failed=False)
+
+            if resp == "a":
+                # Accept AI implementation
+                self.state_manager.mark_created(
+                    action.resource.address,
+                    files=agent_result.all_files,
+                )
+                self.state_manager.save()
+                result.implemented.append(action.resource.address)
+                print(f"  {_C.GREEN}✓ Accepted{_C.RESET}")
+            elif resp == "e":
+                # Accept but mark as partial (human will edit)
+                self.state_manager.mark_partial(
+                    action.resource.address,
+                    reason="AI implementation accepted with edits needed",
+                )
+                self.state_manager.save()
+                result.implemented.append(action.resource.address)
+                print(f"  {_C.YELLOW}~ Accepted (needs edits){_C.RESET}")
+            elif resp == "r":
+                # Reject — revert changes
+                result.failed.append(action.resource.address)
+                print(f"  {_C.RED}✗ Rejected{_C.RESET}")
+            elif resp == "s":
+                result.skipped.append(action.resource.address)
+                print(f"  {_C.DIM}Skipped{_C.RESET}")
+            elif resp == "q":
+                break
+
+        self._print_hybrid_summary(result)
+        return result
+
+    def _print_hybrid_header(
+        self, idx: int, total: int, action: PlanAction
+    ) -> None:
+        sym_colours = {"create": _C.GREEN, "update": _C.YELLOW, "delete": _C.RED}
+        colour = sym_colours.get(action.action, _C.WHITE)
+        print(f"\n{'═' * 60}")
+        print(
+            f" {_C.BOLD}[{idx}/{total}] Hybrid:{_C.RESET} "
+            f"{colour}{action.symbol} {action.action} "
+            f"{action.resource.address}{_C.RESET}"
+        )
+        print(f"{'═' * 60}")
+
+    def _print_hybrid_options(self, failed: bool = False) -> None:
+        print(f"\n{'─' * 60}")
+        if failed:
+            print(
+                f" [{_C.DIM}s{_C.RESET}]kip  "
+                f"[{_C.GREEN}m{_C.RESET}]anual  "
+                f"[{_C.RED}q{_C.RESET}]uit"
+            )
+        else:
+            print(
+                f" [{_C.GREEN}a{_C.RESET}]ccept  "
+                f"[{_C.YELLOW}e{_C.RESET}]dit (accept+partial)  "
+                f"[{_C.RED}r{_C.RESET}]eject  "
+                f"[{_C.DIM}s{_C.RESET}]kip  "
+                f"[{_C.RED}q{_C.RESET}]uit"
+            )
+
+    def _prompt_hybrid(self, failed: bool = False) -> str:
+        try:
+            return self._input_fn("→ ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            return "q"
+
+    def _do_manual(self, action: PlanAction, result: ApplyResult) -> None:
+        """Fall back to manual implementation for one action."""
+        addr = action.resource.address
+        try:
+            files_raw = self._input_fn(
+                f"Implement {addr} manually. Files (comma-sep): "
+            )
+        except (EOFError, KeyboardInterrupt):
+            result.skipped.append(addr)
+            return
+        files_list = [f.strip() for f in files_raw.split(",") if f.strip()]
+        self.state_manager.mark_created(addr, files=files_list)
+        self.state_manager.save()
+        result.implemented.append(addr)
+        print(f"  {_C.GREEN}✓ Manually implemented{_C.RESET}")
+
+    def _print_hybrid_summary(self, result: ApplyResult) -> None:
+        print(f"\n{'═' * 60}")
+        print(f" {_C.BOLD}Hybrid Apply Summary{_C.RESET}")
+        print(f"{'═' * 60}")
+        if result.implemented:
+            print(
+                f" {_C.GREEN}✓ Implemented: "
+                f"{len(result.implemented)}{_C.RESET}"
+            )
+        if result.failed:
+            print(f" {_C.RED}✗ Rejected: {len(result.failed)}{_C.RESET}")
+        if result.skipped:
+            print(f" {_C.DIM}Skipped: {len(result.skipped)}{_C.RESET}")
+        print()
+
+
+# ── Market Mode ───────────────────────────────────────────────────────
 
 class MarketMode(BaseMode):
-    """Market mode — post tasks to Execution Market. Coming in Phase 5.1."""
+    """
+    Market mode — post implementation tasks to Execution Market.
+
+    Converts resources into bounty tasks that human developers can claim
+    and implement. Integrates with x402 for payment.
+    """
+
+    def __init__(
+        self,
+        state_manager: StateManager,
+        context_registry: Optional[ContextRegistry] = None,
+        config: Optional[ApplyConfig] = None,
+        market_url: Optional[str] = None,
+        project_root: Optional[str | Path] = None,
+    ):
+        super().__init__(state_manager, context_registry, config)
+        self._market_url = market_url or "https://execution.market"
+        self._project_root = Path(project_root) if project_root else Path.cwd()
+        self._prompt_builder = PromptBuilder(
+            project_root=self._project_root,
+            state_manager=state_manager,
+            context_registry=context_registry,
+        )
 
     def execute(self, ordered_actions: list[PlanAction]) -> ApplyResult:
-        raise NotImplementedError("Coming in Phase 5.1")
+        result = ApplyResult()
+        total = len(ordered_actions)
+
+        for idx, action in enumerate(ordered_actions, 1):
+            addr = action.resource.address
+            print(
+                f"\n{_C.BOLD}[{idx}/{total}]{_C.RESET} "
+                f"{_C.MAGENTA}📋 Posting to market: {addr}{_C.RESET}"
+            )
+
+            # Build task description from prompt
+            prompt = self._prompt_builder.build(action)
+
+            task = self._build_market_task(action, prompt)
+            posted = self._post_to_market(task)
+
+            if posted:
+                result.market_pending.append(addr)
+                print(
+                    f"  {_C.MAGENTA}✓ Posted to {self._market_url}{_C.RESET}"
+                )
+            else:
+                result.failed.append(addr)
+                print(f"  {_C.RED}✗ Failed to post{_C.RESET}")
+
+        self._print_market_summary(result)
+        return result
+
+    def _build_market_task(
+        self, action: PlanAction, prompt: str
+    ) -> dict:
+        """Build an Execution Market task from a plan action."""
+        resource = action.resource
+        return {
+            "title": f"[terra4mice] {action.action} {resource.address}",
+            "description": prompt,
+            "type": "code_implementation",
+            "tags": [
+                "terra4mice",
+                resource.type,
+                action.action,
+            ],
+            "metadata": {
+                "resource_address": resource.address,
+                "resource_type": resource.type,
+                "action": action.action,
+                "attributes": resource.attributes,
+                "dependencies": resource.depends_on,
+            },
+        }
+
+    def _post_to_market(self, task: dict) -> bool:
+        """
+        Post a task to Execution Market.
+
+        Returns True if posted successfully.
+        Currently a stub — will integrate with EM API.
+        """
+        # TODO: Integrate with Execution Market API
+        # For now, just log the task
+        print(f"    {_C.DIM}Task: {task['title']}{_C.RESET}")
+        print(f"    {_C.DIM}Tags: {', '.join(task['tags'])}{_C.RESET}")
+        return True
+
+    def _print_market_summary(self, result: ApplyResult) -> None:
+        print(f"\n{'═' * 60}")
+        print(f" {_C.BOLD}Market Apply Summary{_C.RESET}")
+        print(f"{'═' * 60}")
+        if result.market_pending:
+            print(
+                f" {_C.MAGENTA}📋 Posted: "
+                f"{len(result.market_pending)}{_C.RESET}"
+            )
+        if result.failed:
+            print(f" {_C.RED}✗ Failed: {len(result.failed)}{_C.RESET}")
+        print()

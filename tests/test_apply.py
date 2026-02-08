@@ -402,24 +402,26 @@ class TestInteractiveMode:
 # Stub Mode Tests
 # ══════════════════════════════════════════════════════════════════════
 
-class TestStubModes:
-    def test_auto_mode_raises(self):
-        sm = FakeStateManager()
-        mode = AutoMode(state_manager=sm)
-        with pytest.raises(NotImplementedError, match="Phase 5.1"):
-            mode.execute([])
+class TestImplementedModes:
+    """Phase 5.1: Auto, Hybrid, and Market modes are now implemented."""
 
-    def test_hybrid_mode_raises(self):
+    def test_auto_mode_runs_empty(self):
         sm = FakeStateManager()
-        mode = HybridMode(state_manager=sm)
-        with pytest.raises(NotImplementedError, match="Phase 5.1"):
-            mode.execute([])
+        mode = AutoMode(state_manager=sm, project_root="/tmp")
+        result = mode.execute([])
+        assert result.total == 0
 
-    def test_market_mode_raises(self):
+    def test_hybrid_mode_runs_empty(self):
         sm = FakeStateManager()
-        mode = MarketMode(state_manager=sm)
-        with pytest.raises(NotImplementedError, match="Phase 5.1"):
-            mode.execute([])
+        mode = HybridMode(state_manager=sm, project_root="/tmp")
+        result = mode.execute([])
+        assert result.total == 0
+
+    def test_market_mode_runs_empty(self):
+        sm = FakeStateManager()
+        mode = MarketMode(state_manager=sm, project_root="/tmp")
+        result = mode.execute([])
+        assert result.total == 0
 
 
 # ══════════════════════════════════════════════════════════════════════

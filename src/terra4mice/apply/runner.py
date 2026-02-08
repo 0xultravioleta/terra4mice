@@ -94,11 +94,13 @@ class ApplyRunner:
         state_manager: StateManager,
         context_registry: Optional[ContextRegistry] = None,
         config: Optional[ApplyConfig] = None,
+        project_root: Optional[str] = None,
     ):
         self.spec = spec
         self.state_manager = state_manager
         self.context_registry = context_registry
         self.config = config or ApplyConfig()
+        self.project_root = project_root
 
     # ------------------------------------------------------------------
     # Public API
@@ -224,8 +226,14 @@ class ApplyRunner:
         }
 
         handler_cls = handlers.get(self.config.mode, InteractiveMode)
-        return handler_cls(
-            state_manager=self.state_manager,
-            context_registry=self.context_registry,
-            config=self.config,
-        )
+
+        # Auto, Hybrid, and Market modes accept project_root
+        kwargs: dict = {
+            "state_manager": self.state_manager,
+            "context_registry": self.context_registry,
+            "config": self.config,
+        }
+        if handler_cls in (AutoMode, HybridMode, MarketMode) and self.project_root:
+            kwargs["project_root"] = self.project_root
+
+        return handler_cls(**kwargs)
