@@ -4,7 +4,7 @@
 >
 > "El software no esta listo cuando funciona, esta listo cuando el state converge con el spec"
 
-terra4mice aplica el modelo mental de Terraform al desarrollo de software. Mientras Terraform gestiona infraestructura, terra4mice gestiona **desarrollo vivo**.
+Asi como Git rastrea cambios en archivos, terra4mice rastrea completitud de features. Mientras Git muestra `git diff` para codigo, terra4mice muestra `terra4mice plan` para gaps de implementacion.
 
 ## El Problema
 
@@ -31,17 +31,31 @@ PLAN (diff)           ->  spec - state = trabajo a hacer
 APPLY (execution)     ->  Ciclos hasta convergencia
 ```
 
+## Cuando NO usar terra4mice
+
+❌ Proyectos <10 recursos (GitHub Issues es suficiente)
+❌ R&D greenfield con requerimientos cambiantes (overhead no justificado)
+❌ Equipos sin cultura spec-first (terra4mice lo fuerza)
+❌ Necesidades puras de calidad de codigo (usar SonarQube/linters)
+
+## Cuando terra4mice brilla
+
+✅ Workflows de desarrollo Multi-AI (Claude Code + Copilot + Cursor)
+✅ Proyectos de livecoding/streaming (seguimiento transparente de progreso)
+✅ Spec drift como problema cronico (implementaciones incompletas)
+✅ Seguimiento de dependencias entre features
+
 ## Quick Start
 
 ```bash
-# Instalar
+# Instalar (analisis AST con tree-sitter incluido por defecto)
 pip install terra4mice
-
-# Con analisis AST profundo (opcional, Python >=3.10)
-pip install terra4mice[ast]
 
 # Con remote state backend (S3 + DynamoDB locking)
 pip install terra4mice[remote]
+
+# Todos los extras
+pip install terra4mice[all]
 
 # Inicializar en tu proyecto
 cd my-project

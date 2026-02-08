@@ -4,7 +4,7 @@
 >
 > "Software isn't done when it works. It's done when state converges with spec."
 
-terra4mice applies Terraform's mental model to software development. While Terraform manages infrastructure, terra4mice manages **living development**.
+Like Git tracks file changes, terra4mice tracks feature completeness. While Git shows `git diff` for code, terra4mice shows `terra4mice plan` for implementation gaps.
 
 ## The Problem
 
@@ -31,17 +31,31 @@ PLAN (diff)           ->  spec - state = work to do
 APPLY (execution)     ->  Cycles until convergence
 ```
 
+## When NOT to Use terra4mice
+
+❌ Projects <10 resources (GitHub Issues suffice)
+❌ Greenfield R&D with changing requirements (overhead not justified)
+❌ Teams without spec-first culture (terra4mice forces it)
+❌ Pure code quality needs (use SonarQube/linters instead)
+
+## When terra4mice Shines
+
+✅ Multi-AI development workflows (Claude Code + Copilot + Cursor)
+✅ Livecoding/streaming projects (transparent progress tracking)
+✅ Spec drift as chronic problem (incomplete implementations)
+✅ Dependency tracking across features
+
 ## Quick Start
 
 ```bash
-# Install
+# Install (tree-sitter AST analysis included by default)
 pip install terra4mice
-
-# With deep AST analysis (optional, Python >=3.10)
-pip install terra4mice[ast]
 
 # With remote state backend (S3 + DynamoDB locking)
 pip install terra4mice[remote]
+
+# All extras
+pip install terra4mice[all]
 
 # Initialize in your project
 cd my-project
@@ -351,8 +365,6 @@ Supported languages: Python, TypeScript/TSX, JavaScript, Solidity.
           "name": "InferenceEngine",
           "kind": "class",
           "status": "implemented",
-          "line_start": 94,
-          "line_end": 686,
           "file": "src/terra4mice/inference.py"
         },
         "format_report": {
