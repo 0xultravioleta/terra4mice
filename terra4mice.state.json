@@ -1,17 +1,18 @@
 {
   "version": "1",
-  "serial": 74,
-  "last_updated": "2026-02-06T15:22:34.071117",
+  "serial": 142,
+  "last_updated": "2026-02-08T15:57:09.162032",
   "resources": [
     {
       "type": "config",
       "name": "pyproject",
       "status": "implemented",
+      "locked": false,
+      "source": "auto",
       "attributes": {
-        "inference_confidence": 0.75,
+        "inference_confidence": 0.8,
         "inference_evidence": [
-          "Explicit files found: ['pyproject.toml']",
-          "AST analysis: 50% match"
+          "Explicit files found: ['pyproject.toml']"
         ]
       },
       "depends_on": [],
@@ -20,17 +21,18 @@
       ],
       "tests": [],
       "created_at": null,
-      "updated_at": "2026-02-06T15:22:34.071117"
+      "updated_at": "2026-02-08T15:57:09.162032"
     },
     {
       "type": "docs",
       "name": "plan_doc",
       "status": "implemented",
+      "locked": false,
+      "source": "auto",
       "attributes": {
-        "inference_confidence": 0.75,
+        "inference_confidence": 0.8,
         "inference_evidence": [
-          "Explicit files found: ['PLAN.md']",
-          "AST analysis: 50% match"
+          "Explicit files found: ['PLAN.md']"
         ]
       },
       "depends_on": [],
@@ -39,17 +41,18 @@
       ],
       "tests": [],
       "created_at": null,
-      "updated_at": "2026-02-06T15:22:34.071117"
+      "updated_at": "2026-02-08T15:57:09.162032"
     },
     {
       "type": "docs",
       "name": "progress",
       "status": "implemented",
+      "locked": false,
+      "source": "auto",
       "attributes": {
-        "inference_confidence": 0.75,
+        "inference_confidence": 0.8,
         "inference_evidence": [
-          "Explicit files found: ['PROGRESS.md']",
-          "AST analysis: 50% match"
+          "Explicit files found: ['PROGRESS.md']"
         ]
       },
       "depends_on": [],
@@ -58,17 +61,18 @@
       ],
       "tests": [],
       "created_at": null,
-      "updated_at": "2026-02-06T15:22:34.071117"
+      "updated_at": "2026-02-08T15:57:09.162032"
     },
     {
       "type": "docs",
       "name": "readme",
       "status": "implemented",
+      "locked": false,
+      "source": "auto",
       "attributes": {
-        "inference_confidence": 0.75,
+        "inference_confidence": 0.8,
         "inference_evidence": [
-          "Explicit files found: ['README.md']",
-          "AST analysis: 50% match"
+          "Explicit files found: ['README.md']"
         ]
       },
       "depends_on": [],
@@ -77,17 +81,18 @@
       ],
       "tests": [],
       "created_at": null,
-      "updated_at": "2026-02-06T15:22:34.071117"
+      "updated_at": "2026-02-08T15:57:09.162032"
     },
     {
       "type": "docs",
       "name": "spec_doc",
       "status": "implemented",
+      "locked": false,
+      "source": "auto",
       "attributes": {
-        "inference_confidence": 0.75,
+        "inference_confidence": 0.8,
         "inference_evidence": [
-          "Explicit files found: ['SPEC.md']",
-          "AST analysis: 50% match"
+          "Explicit files found: ['SPEC.md']"
         ]
       },
       "depends_on": [],
@@ -96,30 +101,33 @@
       ],
       "tests": [],
       "created_at": null,
-      "updated_at": "2026-02-06T15:22:34.071117"
+      "updated_at": "2026-02-08T15:57:09.162032"
     },
     {
       "type": "dogfood",
       "name": "seal_registry",
       "status": "implemented",
+      "locked": false,
+      "source": "auto",
       "attributes": {},
       "depends_on": [],
       "files": [
         "~/clawd/projects/describe-net-contracts/terra4mice.spec.yaml"
       ],
       "tests": [],
-      "created_at": "2026-02-06T15:22:33.269911",
-      "updated_at": "2026-02-06T15:22:33.269911"
+      "created_at": "2026-02-08T15:57:08.672188",
+      "updated_at": "2026-02-08T15:57:08.672188"
     },
     {
       "type": "example",
       "name": "demo_project",
       "status": "implemented",
+      "locked": false,
+      "source": "auto",
       "attributes": {
-        "inference_confidence": 0.75,
+        "inference_confidence": 0.8,
         "inference_evidence": [
-          "Explicit files found: ['examples/demo-project/terra4mice.spec.yaml', 'examples/demo-project/terra4mice.state.json']",
-          "AST analysis: 50% match"
+          "Explicit files found: ['examples/demo-project/terra4mice.spec.yaml', 'examples/demo-project/terra4mice.state.json']"
         ]
       },
       "depends_on": [],
@@ -129,17 +137,18 @@
       ],
       "tests": [],
       "created_at": null,
-      "updated_at": "2026-02-06T15:22:34.071117"
+      "updated_at": "2026-02-08T15:57:09.162032"
     },
     {
       "type": "example",
       "name": "ultratrack_demo",
       "status": "implemented",
+      "locked": false,
+      "source": "auto",
       "attributes": {
-        "inference_confidence": 0.75,
+        "inference_confidence": 0.8,
         "inference_evidence": [
-          "Explicit files found: ['examples/ultratrack-demo/terra4mice.spec.yaml', 'examples/ultratrack-demo/terra4mice.state.json']",
-          "AST analysis: 50% match"
+          "Explicit files found: ['examples/ultratrack-demo/terra4mice.spec.yaml', 'examples/ultratrack-demo/terra4mice.state.json']"
         ]
       },
       "depends_on": [],
@@ -149,17 +158,19 @@
       ],
       "tests": [],
       "created_at": null,
-      "updated_at": "2026-02-06T15:22:34.071117"
+      "updated_at": "2026-02-08T15:57:09.162032"
     },
     {
       "type": "feature",
       "name": "context_cli",
-      "status": "partial",
+      "status": "implemented",
+      "locked": false,
+      "source": "auto",
       "attributes": {
-        "inference_confidence": 0.69,
+        "inference_confidence": 1.0,
         "inference_evidence": [
           "Explicit files found: ['src/terra4mice/cli.py']",
-          "AST analysis: 30% match"
+          "AST analysis: 100% match"
         ]
       },
       "depends_on": [],
@@ -168,158 +179,1538 @@
       ],
       "tests": [],
       "created_at": null,
-      "updated_at": "2026-02-06T15:22:34.071117"
+      "updated_at": "2026-02-08T15:57:09.162032",
+      "symbols": {
+        "_load_context_registry": {
+          "name": "_load_context_registry",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/cli.py"
+        },
+        "cmd_contexts_export": {
+          "name": "cmd_contexts_export",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/cli.py"
+        },
+        "_save_context_registry": {
+          "name": "_save_context_registry",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/cli.py"
+        },
+        "cmd_contexts_list": {
+          "name": "cmd_contexts_list",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/cli.py"
+        },
+        "cmd_apply": {
+          "name": "cmd_apply",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/cli.py"
+        },
+        "_progress": {
+          "name": "_progress",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/cli.py"
+        },
+        "cmd_plan": {
+          "name": "cmd_plan",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/cli.py"
+        },
+        "cmd_init": {
+          "name": "cmd_init",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/cli.py"
+        },
+        "cmd_ci": {
+          "name": "cmd_ci",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/cli.py"
+        },
+        "cmd_state_list": {
+          "name": "cmd_state_list",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/cli.py"
+        },
+        "cmd_state_show": {
+          "name": "cmd_state_show",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/cli.py"
+        },
+        "cmd_state_rm": {
+          "name": "cmd_state_rm",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/cli.py"
+        },
+        "cmd_mark": {
+          "name": "cmd_mark",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/cli.py"
+        },
+        "cmd_lock": {
+          "name": "cmd_lock",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/cli.py"
+        },
+        "cmd_contexts_import": {
+          "name": "cmd_contexts_import",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/cli.py"
+        },
+        "_create_state_manager": {
+          "name": "_create_state_manager",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/cli.py"
+        },
+        "cmd_force_unlock": {
+          "name": "cmd_force_unlock",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/cli.py"
+        },
+        "cmd_contexts_show": {
+          "name": "cmd_contexts_show",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/cli.py"
+        },
+        "_convergence": {
+          "name": "_convergence",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/cli.py"
+        },
+        "main": {
+          "name": "main",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/cli.py"
+        },
+        "cmd_refresh": {
+          "name": "cmd_refresh",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/cli.py"
+        },
+        "cmd_contexts_sync": {
+          "name": "cmd_contexts_sync",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/cli.py"
+        },
+        "cmd_state_pull": {
+          "name": "cmd_state_pull",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/cli.py"
+        },
+        "cmd_migrate_state": {
+          "name": "cmd_migrate_state",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/cli.py"
+        },
+        "cmd_diff": {
+          "name": "cmd_diff",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/cli.py"
+        },
+        "cmd_unlock": {
+          "name": "cmd_unlock",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/cli.py"
+        },
+        "cmd_state_push": {
+          "name": "cmd_state_push",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/cli.py"
+        }
+      }
     },
     {
-      "type": "module",
-      "name": "analyzers",
+      "type": "feature",
+      "name": "context_export",
       "status": "implemented",
+      "locked": false,
+      "source": "auto",
       "attributes": {
-        "inference_confidence": 1.0,
+        "inference_confidence": 0.89,
         "inference_evidence": [
-          "Explicit files found: ['src/terra4mice/analyzers.py']",
-          "Pattern match files: ['src\\\\terra4mice\\\\analyzers.py', 'tests\\\\test_analyzers.py']",
-          "Tests found: ['tests\\\\test_analyzers.py']",
-          "AST analysis: 77% match"
+          "Explicit files found: ['src/terra4mice/context_io.py']",
+          "AST analysis: 30% match"
         ]
       },
       "depends_on": [],
       "files": [
-        "src/terra4mice/analyzers.py",
-        "src\\terra4mice\\analyzers.py",
-        "tests\\test_analyzers.py"
-      ],
-      "tests": [
-        "tests\\test_analyzers.py"
-      ],
-      "created_at": null,
-      "updated_at": "2026-02-06T15:22:34.071117"
-    },
-    {
-      "type": "module",
-      "name": "cli",
-      "status": "implemented",
-      "attributes": {
-        "inference_confidence": 1.0,
-        "inference_evidence": [
-          "Explicit files found: ['src/terra4mice/cli.py']",
-          "Pattern match files: ['src\\\\terra4mice\\\\cli.py']",
-          "AST analysis: 100% match"
-        ]
-      },
-      "depends_on": [],
-      "files": [
-        "src/terra4mice/cli.py",
-        "src\\terra4mice\\cli.py"
+        "src/terra4mice/context_io.py"
       ],
       "tests": [],
       "created_at": null,
-      "updated_at": "2026-02-06T15:22:34.071117"
+      "updated_at": "2026-02-08T15:57:09.162032",
+      "symbols": {
+        "MergeStrategy": {
+          "name": "MergeStrategy",
+          "kind": "class",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/context_io.py"
+        },
+        "ImportResult": {
+          "name": "ImportResult",
+          "kind": "class",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/context_io.py"
+        },
+        "ContextHandoff": {
+          "name": "ContextHandoff",
+          "kind": "class",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/context_io.py"
+        },
+        "load": {
+          "name": "load",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/context_io.py"
+        },
+        "format_conflict_warning": {
+          "name": "format_conflict_warning",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/context_io.py"
+        },
+        "__post_init__": {
+          "name": "__post_init__",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/context_io.py"
+        },
+        "to_json": {
+          "name": "to_json",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/context_io.py"
+        },
+        "from_dict": {
+          "name": "from_dict",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/context_io.py"
+        },
+        "to_dict": {
+          "name": "to_dict",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/context_io.py"
+        },
+        "save": {
+          "name": "save",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/context_io.py"
+        },
+        "export_resource_context": {
+          "name": "export_resource_context",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/context_io.py"
+        },
+        "sync_contexts": {
+          "name": "sync_contexts",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/context_io.py"
+        },
+        "detect_conflicts": {
+          "name": "detect_conflicts",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/context_io.py"
+        },
+        "import_handoff": {
+          "name": "import_handoff",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/context_io.py"
+        },
+        "export_agent_context": {
+          "name": "export_agent_context",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/context_io.py"
+        },
+        "from_json": {
+          "name": "from_json",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/context_io.py"
+        },
+        "export_context": {
+          "name": "export_context",
+          "kind": "function",
+          "status": "missing",
+          "parent": "",
+          "file": ""
+        },
+        "import_context": {
+          "name": "import_context",
+          "kind": "function",
+          "status": "missing",
+          "parent": "",
+          "file": ""
+        },
+        "diff_contexts": {
+          "name": "diff_contexts",
+          "kind": "function",
+          "status": "missing",
+          "parent": "",
+          "file": ""
+        }
+      }
     },
     {
-      "type": "module",
-      "name": "inference",
+      "type": "feature",
+      "name": "context_registry",
       "status": "implemented",
+      "locked": false,
+      "source": "auto",
       "attributes": {
-        "inference_confidence": 0.9999999999999999,
+        "inference_confidence": 0.9,
         "inference_evidence": [
-          "Explicit files found: ['src/terra4mice/inference.py']",
-          "Pattern match files: ['src\\\\terra4mice\\\\inference.py']",
+          "Explicit files found: ['src/terra4mice/contexts.py']",
           "AST analysis: 33% match"
         ]
       },
       "depends_on": [],
       "files": [
-        "src/terra4mice/inference.py",
-        "src\\terra4mice\\inference.py"
+        "src/terra4mice/contexts.py"
       ],
       "tests": [],
       "created_at": null,
-      "updated_at": "2026-02-06T15:22:34.071117"
+      "updated_at": "2026-02-08T15:57:09.162032",
+      "symbols": {
+        "ContextStatus": {
+          "name": "ContextStatus",
+          "kind": "class",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/contexts.py"
+        },
+        "ContextEntry": {
+          "name": "ContextEntry",
+          "kind": "class",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/contexts.py"
+        },
+        "AgentProfile": {
+          "name": "AgentProfile",
+          "kind": "class",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/contexts.py"
+        },
+        "ContextRegistry": {
+          "name": "ContextRegistry",
+          "kind": "class",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/contexts.py"
+        },
+        "register_context": {
+          "name": "register_context",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/contexts.py"
+        },
+        "remove": {
+          "name": "remove",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/contexts.py"
+        },
+        "age_str": {
+          "name": "age_str",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/contexts.py"
+        },
+        "list_agents": {
+          "name": "list_agents",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/contexts.py"
+        },
+        "to_dict": {
+          "name": "to_dict",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/contexts.py"
+        },
+        "get_resource_contexts": {
+          "name": "get_resource_contexts",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/contexts.py"
+        },
+        "from_dict": {
+          "name": "from_dict",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/contexts.py"
+        },
+        "infer_agent_from_env": {
+          "name": "infer_agent_from_env",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/contexts.py"
+        },
+        "register_agent": {
+          "name": "register_agent",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/contexts.py"
+        },
+        "get_agent_contexts": {
+          "name": "get_agent_contexts",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/contexts.py"
+        },
+        "clear_agent": {
+          "name": "clear_agent",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/contexts.py"
+        },
+        "__init__": {
+          "name": "__init__",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/contexts.py"
+        },
+        "list_all": {
+          "name": "list_all",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/contexts.py"
+        },
+        "from_json": {
+          "name": "from_json",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/contexts.py"
+        },
+        "expire_old": {
+          "name": "expire_old",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/contexts.py"
+        },
+        "who_knows": {
+          "name": "who_knows",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/contexts.py"
+        },
+        "status": {
+          "name": "status",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/contexts.py"
+        },
+        "to_json": {
+          "name": "to_json",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/contexts.py"
+        },
+        "get_agent": {
+          "name": "get_agent",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/contexts.py"
+        },
+        "update_status": {
+          "name": "update_status",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/contexts.py"
+        },
+        "coverage_summary": {
+          "name": "coverage_summary",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/contexts.py"
+        },
+        "find_conflicts": {
+          "name": "find_conflicts",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/contexts.py"
+        },
+        "get_agent_context": {
+          "name": "get_agent_context",
+          "kind": "function",
+          "status": "missing",
+          "parent": "",
+          "file": ""
+        },
+        "list_contexts": {
+          "name": "list_contexts",
+          "kind": "function",
+          "status": "missing",
+          "parent": "",
+          "file": ""
+        },
+        "merge_contexts": {
+          "name": "merge_contexts",
+          "kind": "function",
+          "status": "missing",
+          "parent": "",
+          "file": ""
+        }
+      }
+    },
+    {
+      "type": "module",
+      "name": "analyzers",
+      "status": "implemented",
+      "locked": false,
+      "source": "auto",
+      "attributes": {
+        "inference_confidence": 1.0,
+        "inference_evidence": [
+          "Explicit files found: ['src/terra4mice/analyzers.py']",
+          "Pattern match files: ['src/terra4mice/analyzers.py']",
+          "Tests found: ['tests/test_analyzers.py']",
+          "AST analysis: 100% match"
+        ]
+      },
+      "depends_on": [],
+      "files": [
+        "src/terra4mice/analyzers.py"
+      ],
+      "tests": [
+        "tests/test_analyzers.py"
+      ],
+      "created_at": null,
+      "updated_at": "2026-02-08T15:57:09.162032",
+      "symbols": {
+        "SymbolInfo": {
+          "name": "SymbolInfo",
+          "kind": "class",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/analyzers.py"
+        },
+        "AnalysisResult": {
+          "name": "AnalysisResult",
+          "kind": "class",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/analyzers.py"
+        },
+        "all_names": {
+          "name": "all_names",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/analyzers.py"
+        },
+        "analyze_python": {
+          "name": "analyze_python",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/analyzers.py"
+        },
+        "is_available": {
+          "name": "is_available",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/analyzers.py"
+        },
+        "_cached_language": {
+          "name": "_cached_language",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/analyzers.py"
+        },
+        "_cached_parser": {
+          "name": "_cached_parser",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/analyzers.py"
+        },
+        "_extract_names": {
+          "name": "_extract_names",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/analyzers.py"
+        },
+        "_assign_parents": {
+          "name": "_assign_parents",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/analyzers.py"
+        },
+        "analyze_typescript": {
+          "name": "analyze_typescript",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/analyzers.py"
+        },
+        "analyze_solidity": {
+          "name": "analyze_solidity",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/analyzers.py"
+        },
+        "analyze_file": {
+          "name": "analyze_file",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/analyzers.py"
+        },
+        "score_against_spec": {
+          "name": "score_against_spec",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/analyzers.py"
+        },
+        "_substr_in_set": {
+          "name": "_substr_in_set",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/analyzers.py"
+        },
+        "_extract_symbols": {
+          "name": "_extract_symbols",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/analyzers.py"
+        },
+        "_in_set": {
+          "name": "_in_set",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/analyzers.py"
+        },
+        "qualified_name": {
+          "name": "qualified_name",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/analyzers.py"
+        },
+        "_safe_query": {
+          "name": "_safe_query",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/analyzers.py"
+        },
+        "analyze_javascript": {
+          "name": "analyze_javascript",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/analyzers.py"
+        }
+      }
+    },
+    {
+      "type": "module",
+      "name": "cli",
+      "status": "implemented",
+      "locked": false,
+      "source": "auto",
+      "attributes": {
+        "inference_confidence": 1.0,
+        "inference_evidence": [
+          "Explicit files found: ['src/terra4mice/cli.py']",
+          "Pattern match files: ['src/terra4mice/cli.py']",
+          "Tests found: ['tests/test_cli_contexts.py']",
+          "AST analysis: 100% match"
+        ]
+      },
+      "depends_on": [],
+      "files": [
+        "src/terra4mice/cli.py"
+      ],
+      "tests": [
+        "tests/test_cli_contexts.py"
+      ],
+      "created_at": null,
+      "updated_at": "2026-02-08T15:57:09.162032",
+      "symbols": {
+        "cmd_apply": {
+          "name": "cmd_apply",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/cli.py"
+        },
+        "cmd_state_pull": {
+          "name": "cmd_state_pull",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/cli.py"
+        },
+        "cmd_init": {
+          "name": "cmd_init",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/cli.py"
+        },
+        "cmd_plan": {
+          "name": "cmd_plan",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/cli.py"
+        },
+        "cmd_ci": {
+          "name": "cmd_ci",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/cli.py"
+        },
+        "cmd_state_list": {
+          "name": "cmd_state_list",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/cli.py"
+        },
+        "cmd_state_show": {
+          "name": "cmd_state_show",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/cli.py"
+        },
+        "cmd_state_rm": {
+          "name": "cmd_state_rm",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/cli.py"
+        },
+        "cmd_mark": {
+          "name": "cmd_mark",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/cli.py"
+        },
+        "cmd_lock": {
+          "name": "cmd_lock",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/cli.py"
+        },
+        "cmd_force_unlock": {
+          "name": "cmd_force_unlock",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/cli.py"
+        },
+        "_create_state_manager": {
+          "name": "_create_state_manager",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/cli.py"
+        },
+        "_load_context_registry": {
+          "name": "_load_context_registry",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/cli.py"
+        },
+        "cmd_refresh": {
+          "name": "cmd_refresh",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/cli.py"
+        },
+        "cmd_diff": {
+          "name": "cmd_diff",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/cli.py"
+        },
+        "_save_context_registry": {
+          "name": "_save_context_registry",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/cli.py"
+        },
+        "_convergence": {
+          "name": "_convergence",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/cli.py"
+        },
+        "cmd_contexts_show": {
+          "name": "cmd_contexts_show",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/cli.py"
+        },
+        "main": {
+          "name": "main",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/cli.py"
+        },
+        "cmd_contexts_export": {
+          "name": "cmd_contexts_export",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/cli.py"
+        },
+        "cmd_state_push": {
+          "name": "cmd_state_push",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/cli.py"
+        },
+        "_progress": {
+          "name": "_progress",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/cli.py"
+        },
+        "cmd_unlock": {
+          "name": "cmd_unlock",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/cli.py"
+        },
+        "cmd_contexts_sync": {
+          "name": "cmd_contexts_sync",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/cli.py"
+        },
+        "cmd_migrate_state": {
+          "name": "cmd_migrate_state",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/cli.py"
+        },
+        "cmd_contexts_import": {
+          "name": "cmd_contexts_import",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/cli.py"
+        },
+        "cmd_contexts_list": {
+          "name": "cmd_contexts_list",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/cli.py"
+        }
+      }
+    },
+    {
+      "type": "module",
+      "name": "inference",
+      "status": "implemented",
+      "locked": false,
+      "source": "auto",
+      "attributes": {
+        "inference_confidence": 1.0,
+        "inference_evidence": [
+          "Explicit files found: ['src/terra4mice/inference.py']",
+          "Pattern match files: ['src/terra4mice/inference.py']",
+          "AST analysis: 33% match"
+        ]
+      },
+      "depends_on": [],
+      "files": [
+        "src/terra4mice/inference.py"
+      ],
+      "tests": [],
+      "created_at": null,
+      "updated_at": "2026-02-08T15:57:09.162032",
+      "symbols": {
+        "InferenceResult": {
+          "name": "InferenceResult",
+          "kind": "class",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/inference.py"
+        },
+        "InferenceEngine": {
+          "name": "InferenceEngine",
+          "kind": "class",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/inference.py"
+        },
+        "InferenceConfig": {
+          "name": "InferenceConfig",
+          "kind": "class",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/inference.py"
+        },
+        "_score_typescript_fallback": {
+          "name": "_score_typescript_fallback",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/inference.py"
+        },
+        "__init__": {
+          "name": "__init__",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/inference.py"
+        },
+        "_effective_parallelism": {
+          "name": "_effective_parallelism",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/inference.py"
+        },
+        "infer_all": {
+          "name": "infer_all",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/inference.py"
+        },
+        "_build_file_index": {
+          "name": "_build_file_index",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/inference.py"
+        },
+        "_check_explicit_files": {
+          "name": "_check_explicit_files",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/inference.py"
+        },
+        "_is_excluded": {
+          "name": "_is_excluded",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/inference.py"
+        },
+        "_analyze_ast": {
+          "name": "_analyze_ast",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/inference.py"
+        },
+        "_score_solidity": {
+          "name": "_score_solidity",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/inference.py"
+        },
+        "infer_state": {
+          "name": "infer_state",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/inference.py"
+        },
+        "format_inference_report": {
+          "name": "format_inference_report",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/inference.py"
+        },
+        "_find_by_pattern": {
+          "name": "_find_by_pattern",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/inference.py"
+        },
+        "_detect_missing_symbols": {
+          "name": "_detect_missing_symbols",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/inference.py"
+        },
+        "_score_ast": {
+          "name": "_score_ast",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/inference.py"
+        },
+        "infer_resource": {
+          "name": "infer_resource",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/inference.py"
+        },
+        "_find_tests": {
+          "name": "_find_tests",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/inference.py"
+        },
+        "apply_to_state": {
+          "name": "apply_to_state",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/inference.py"
+        }
+      }
     },
     {
       "type": "module",
       "name": "models",
       "status": "implemented",
+      "locked": false,
+      "source": "auto",
       "attributes": {
         "inference_confidence": 1.0,
         "inference_evidence": [
           "Explicit files found: ['src/terra4mice/models.py']",
-          "Pattern match files: ['src\\\\terra4mice\\\\models.py']",
+          "Pattern match files: ['src/terra4mice/models.py']",
           "AST analysis: 100% match"
         ]
       },
       "depends_on": [],
       "files": [
-        "src/terra4mice/models.py",
-        "src\\terra4mice\\models.py"
+        "src/terra4mice/models.py"
       ],
       "tests": [],
       "created_at": null,
-      "updated_at": "2026-02-06T15:22:34.071117"
+      "updated_at": "2026-02-08T15:57:09.162032",
+      "symbols": {
+        "SymbolStatus": {
+          "name": "SymbolStatus",
+          "kind": "class",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/models.py"
+        },
+        "ResourceStatus": {
+          "name": "ResourceStatus",
+          "kind": "class",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/models.py"
+        },
+        "Resource": {
+          "name": "Resource",
+          "kind": "class",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/models.py"
+        },
+        "State": {
+          "name": "State",
+          "kind": "class",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/models.py"
+        },
+        "Spec": {
+          "name": "Spec",
+          "kind": "class",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/models.py"
+        },
+        "PlanAction": {
+          "name": "PlanAction",
+          "kind": "class",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/models.py"
+        },
+        "Plan": {
+          "name": "Plan",
+          "kind": "class",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/models.py"
+        },
+        "deletes": {
+          "name": "deletes",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/models.py"
+        },
+        "updates": {
+          "name": "updates",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/models.py"
+        },
+        "__str__": {
+          "name": "__str__",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/models.py"
+        },
+        "qualified_name": {
+          "name": "qualified_name",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/models.py"
+        },
+        "get": {
+          "name": "get",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/models.py"
+        },
+        "address": {
+          "name": "address",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/models.py"
+        },
+        "remove": {
+          "name": "remove",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/models.py"
+        },
+        "list_by_status": {
+          "name": "list_by_status",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/models.py"
+        },
+        "add": {
+          "name": "add",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/models.py"
+        },
+        "symbol": {
+          "name": "symbol",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/models.py"
+        },
+        "list": {
+          "name": "list",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/models.py"
+        },
+        "has_changes": {
+          "name": "has_changes",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/models.py"
+        },
+        "creates": {
+          "name": "creates",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/models.py"
+        },
+        "set": {
+          "name": "set",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/models.py"
+        },
+        "summary": {
+          "name": "summary",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/models.py"
+        }
+      }
     },
     {
       "type": "module",
       "name": "planner",
       "status": "implemented",
+      "locked": false,
+      "source": "auto",
       "attributes": {
         "inference_confidence": 1.0,
         "inference_evidence": [
           "Explicit files found: ['src/terra4mice/planner.py']",
-          "Pattern match files: ['src\\\\terra4mice\\\\planner.py']",
+          "Pattern match files: ['src/terra4mice/planner.py']",
           "AST analysis: 100% match"
         ]
       },
       "depends_on": [],
       "files": [
-        "src/terra4mice/planner.py",
-        "src\\terra4mice\\planner.py"
+        "src/terra4mice/planner.py"
       ],
       "tests": [],
       "created_at": null,
-      "updated_at": "2026-02-06T15:22:34.071117"
+      "updated_at": "2026-02-08T15:57:09.162032",
+      "symbols": {
+        "generate_plan": {
+          "name": "generate_plan",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/planner.py"
+        },
+        "check_dependencies": {
+          "name": "check_dependencies",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/planner.py"
+        },
+        "format_plan": {
+          "name": "format_plan",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/planner.py"
+        }
+      }
     },
     {
       "type": "module",
       "name": "spec_parser",
       "status": "implemented",
+      "locked": false,
+      "source": "auto",
       "attributes": {
         "inference_confidence": 1.0,
         "inference_evidence": [
           "Explicit files found: ['src/terra4mice/spec_parser.py']",
-          "Pattern match files: ['src\\\\terra4mice\\\\spec_parser.py']",
+          "Pattern match files: ['src/terra4mice/spec_parser.py']",
           "AST analysis: 100% match"
         ]
       },
       "depends_on": [],
       "files": [
-        "src/terra4mice/spec_parser.py",
-        "src\\terra4mice\\spec_parser.py"
+        "src/terra4mice/spec_parser.py"
       ],
       "tests": [],
       "created_at": null,
-      "updated_at": "2026-02-06T15:22:34.071117"
+      "updated_at": "2026-02-08T15:57:09.162032",
+      "symbols": {
+        "create_example_spec": {
+          "name": "create_example_spec",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/spec_parser.py"
+        },
+        "load_spec_with_backend": {
+          "name": "load_spec_with_backend",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/spec_parser.py"
+        },
+        "_has_circular_dep": {
+          "name": "_has_circular_dep",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/spec_parser.py"
+        },
+        "load_spec": {
+          "name": "load_spec",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/spec_parser.py"
+        },
+        "validate_spec": {
+          "name": "validate_spec",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/spec_parser.py"
+        },
+        "parse_spec": {
+          "name": "parse_spec",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/spec_parser.py"
+        }
+      }
     },
     {
       "type": "module",
       "name": "state_manager",
       "status": "implemented",
+      "locked": false,
+      "source": "auto",
       "attributes": {
         "inference_confidence": 1.0,
         "inference_evidence": [
           "Explicit files found: ['src/terra4mice/state_manager.py']",
-          "Pattern match files: ['src\\\\terra4mice\\\\state_manager.py']",
+          "Pattern match files: ['src/terra4mice/state_manager.py']",
           "AST analysis: 100% match"
         ]
       },
       "depends_on": [],
       "files": [
-        "src/terra4mice/state_manager.py",
-        "src\\terra4mice\\state_manager.py"
+        "src/terra4mice/state_manager.py"
       ],
       "tests": [],
       "created_at": null,
-      "updated_at": "2026-02-06T15:22:34.071117"
+      "updated_at": "2026-02-08T15:57:09.162032",
+      "symbols": {
+        "StateManager": {
+          "name": "StateManager",
+          "kind": "class",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/state_manager.py"
+        },
+        "list": {
+          "name": "list",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/state_manager.py"
+        },
+        "__init__": {
+          "name": "__init__",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/state_manager.py"
+        },
+        "__enter__": {
+          "name": "__enter__",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/state_manager.py"
+        },
+        "__exit__": {
+          "name": "__exit__",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/state_manager.py"
+        },
+        "save": {
+          "name": "save",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/state_manager.py"
+        },
+        "show": {
+          "name": "show",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/state_manager.py"
+        },
+        "mark_created": {
+          "name": "mark_created",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/state_manager.py"
+        },
+        "mark_broken": {
+          "name": "mark_broken",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/state_manager.py"
+        },
+        "remove": {
+          "name": "remove",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/state_manager.py"
+        },
+        "_parse_state": {
+          "name": "_parse_state",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/state_manager.py"
+        },
+        "mark_partial": {
+          "name": "mark_partial",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/state_manager.py"
+        },
+        "_serialize_state": {
+          "name": "_serialize_state",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/state_manager.py"
+        },
+        "load": {
+          "name": "load",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/state_manager.py"
+        },
+        "mark_locked": {
+          "name": "mark_locked",
+          "kind": "function",
+          "status": "implemented",
+          "parent": "",
+          "file": "src/terra4mice/state_manager.py"
+        }
+      }
     }
   ]
 }
