@@ -159,7 +159,7 @@ Backend resolution priority: `--state` CLI flag > spec `backend:` config > defau
 
 - **Phase 1** (MVP CLI) - DONE: init, plan, refresh, state, mark, apply, ci
 - **Phase 2** (tree-sitter AST) - DONE: analyzers.py, multi-language, spec attribute scoring
-- **Phase 3** (Multi-AI Context Tracking) - SPEC DECLARED: context_registry, context_cli, context_export
+- **Phase 3** (Multi-AI Context Tracking) - DONE: contexts.py, context_io.py, context CLI commands, test_contexts.py
 - **Phase 4** (CI/CD Integration) - DONE: GitHub Action, PR comments, badges
 - **Phase 4.5** (Remote State) - DONE: backends.py, S3+DynamoDB locking, state pull/push, force-unlock, migrate-state
 - **Phase 5** (Apply Runner) - PLANNED
