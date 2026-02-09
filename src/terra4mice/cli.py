@@ -650,10 +650,15 @@ def _cmd_apply_enhanced(args):
         mode=getattr(args, "mode", None) or "interactive",
         agent=getattr(args, "agent", None),
         parallel=getattr(args, "parallel", 1),
+        max_workers=getattr(args, "max_workers", 1),
         timeout_minutes=getattr(args, "timeout", 0),
         require_tests=getattr(args, "require_tests", False),
         auto_commit=getattr(args, "auto_commit", False),
         dry_run=getattr(args, "dry_run", False),
+        verify_level=getattr(args, "verify_level", "basic"),
+        market_url=getattr(args, "market_url", None),
+        market_api_key=getattr(args, "market_api_key", None),
+        bounty=getattr(args, "bounty", None),
     )
 
     errors = config.validate()
@@ -662,11 +667,13 @@ def _cmd_apply_enhanced(args):
             print(f"Error: {err}")
         return 1
 
+    project_root = getattr(args, "project_root", None)
     runner = ApplyRunner(
         spec=spec,
         state_manager=sm,
         context_registry=context_registry,
         config=config,
+        project_root=project_root,
     )
 
     resource_filter = getattr(args, "resource", None)
@@ -1359,6 +1366,19 @@ def main():
                               help="Apply only a specific resource address")
     apply_parser.add_argument("--contexts", default=None,
                               help="Path to contexts file")
+    apply_parser.add_argument("--market-url", default=None,
+                              help="Execution Market API URL (default: https://api.execution.market)")
+    apply_parser.add_argument("--market-api-key", default=None,
+                              help="Execution Market API key (or EXECUTION_MARKET_API_KEY env)")
+    apply_parser.add_argument("--verify-level", default="basic",
+                              choices=["basic", "git_diff", "full"],
+                              help="Verification level for implementations")
+    apply_parser.add_argument("--max-workers", type=int, default=1,
+                              help="Max parallel workers for execution")
+    apply_parser.add_argument("--project-root", default=None,
+                              help="Project root directory")
+    apply_parser.add_argument("--bounty", type=float, default=None,
+                              help="Default bounty for market tasks (USD)")
 
     # refresh (auto-inference)
     refresh_parser = subparsers.add_parser("refresh", help="Auto-detect resources from codebase")

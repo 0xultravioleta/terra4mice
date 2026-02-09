@@ -32,6 +32,10 @@ class ApplyConfig:
     auto_commit: bool = False          # Git commit after each resource
     dry_run: bool = False              # Show plan without executing
     enhanced: bool = True              # Use enhanced interactive mode
+    verify_level: str = "basic"        # Verification level: basic | git_diff | full
+    market_url: Optional[str] = None   # Execution Market API URL
+    market_api_key: Optional[str] = None  # Execution Market API key
+    bounty: Optional[float] = None     # Default bounty for market tasks (USD)
 
     def validate(self) -> list[str]:
         """Return list of validation errors (empty if valid)."""
@@ -45,6 +49,11 @@ class ApplyConfig:
             errors.append(f"max_workers must be >= 1, got {self.max_workers}")
         if self.timeout_minutes < 0:
             errors.append(f"timeout_minutes must be >= 0, got {self.timeout_minutes}")
+        if self.verify_level not in ("basic", "git_diff", "full"):
+            errors.append(f"Invalid verify_level: {self.verify_level!r}. "
+                          "Must be basic, git_diff, or full.")
+        if self.bounty is not None and self.bounty <= 0:
+            errors.append(f"bounty must be positive, got {self.bounty}")
         return errors
 
 
@@ -409,5 +418,14 @@ class ApplyRunner:
         }
         if handler_cls in (AutoMode, HybridMode, MarketMode) and self.project_root:
             kwargs["project_root"] = self.project_root
+            
+        # MarketMode-specific parameters
+        if handler_cls == MarketMode:
+            kwargs.update({
+                "market_url": self.config.market_url,
+                "api_key": self.config.market_api_key,
+                "dry_run": self.config.dry_run,
+                "bounty": self.config.bounty,
+            })
 
         return handler_cls(**kwargs)

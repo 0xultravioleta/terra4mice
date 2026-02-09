@@ -372,8 +372,12 @@ class AutoMode(BaseMode):
         addr = action.resource.address
 
         # Verify implementation
+        from .verify import VerificationLevel
+        verify_level = VerificationLevel.BASIC
+        if hasattr(self.config, 'verify_level'):
+            verify_level = VerificationLevel(self.config.verify_level)
         verification = verify_implementation(
-            action.resource, self._project_root
+            action.resource, self._project_root, verify_level
         )
 
         if verification.passed:
@@ -564,8 +568,12 @@ class HybridMode(BaseMode):
                     print(f"  {_C.DIM}│ ... ({remaining} more lines){_C.RESET}")
 
             # Verify
+            from .verify import VerificationLevel
+            verify_level = VerificationLevel.BASIC
+            if hasattr(self.config, 'verify_level'):
+                verify_level = VerificationLevel(self.config.verify_level)
             verification = verify_implementation(
-                action.resource, self._project_root
+                action.resource, self._project_root, verify_level
             )
             score_str = f"verification: {verification.score:.0%}"
             print(f"  {_C.CYAN}📋 {score_str}{_C.RESET}")
@@ -689,15 +697,29 @@ class MarketMode(BaseMode):
         context_registry: Optional[ContextRegistry] = None,
         config: Optional[ApplyConfig] = None,
         market_url: Optional[str] = None,
+        api_key: Optional[str] = None,
+        dry_run: bool = False,
+        bounty: Optional[float] = None,
         project_root: Optional[str | Path] = None,
     ):
         super().__init__(state_manager, context_registry, config)
-        self._market_url = market_url or "https://execution.market"
+        self._market_url = market_url or "https://api.execution.market"
+        self._api_key = api_key
+        self._dry_run = dry_run
+        self._bounty = bounty
         self._project_root = Path(project_root) if project_root else Path.cwd()
         self._prompt_builder = PromptBuilder(
             project_root=self._project_root,
             state_manager=state_manager,
             context_registry=context_registry,
+        )
+        
+        # Initialize market client
+        from .market_client import MarketClient
+        self._market_client = MarketClient(
+            api_key=self._api_key,
+            base_url=self._market_url,
+            dry_run=self._dry_run,
         )
 
     def execute(self, ordered_actions: list[PlanAction]) -> ApplyResult:
@@ -720,7 +742,7 @@ class MarketMode(BaseMode):
             if posted:
                 result.market_pending.append(addr)
                 print(
-                    f"  {_C.MAGENTA}✓ Posted to {self._market_url}{_C.RESET}"
+                    f"  {_C.MAGENTA}✓ Posted to market{_C.RESET}"
                 )
             else:
                 result.failed.append(addr)
@@ -734,10 +756,12 @@ class MarketMode(BaseMode):
     ) -> dict:
         """Build an Execution Market task from a plan action."""
         resource = action.resource
-        return {
+        
+        # Start with base task
+        task = {
             "title": f"[terra4mice] {action.action} {resource.address}",
             "description": prompt,
-            "type": "code_implementation",
+            "task_type": "code_implementation",
             "tags": [
                 "terra4mice",
                 resource.type,
@@ -751,19 +775,35 @@ class MarketMode(BaseMode):
                 "dependencies": resource.depends_on,
             },
         }
+        
+        # Add bounty if configured
+        if self._bounty is not None:
+            task["bounty"] = self._bounty
+        elif "bounty" in resource.attributes:
+            task["bounty"] = resource.attributes["bounty"]
+            
+        # Add requirements from resource attributes
+        if "requirements" in resource.attributes:
+            task["requirements"] = resource.attributes["requirements"]
+        
+        return task
 
     def _post_to_market(self, task: dict) -> bool:
         """
         Post a task to Execution Market.
 
         Returns True if posted successfully.
-        Currently a stub — will integrate with EM API.
         """
-        # TODO: Integrate with Execution Market API
-        # For now, just log the task
-        print(f"    {_C.DIM}Task: {task['title']}{_C.RESET}")
-        print(f"    {_C.DIM}Tags: {', '.join(task['tags'])}{_C.RESET}")
-        return True
+        try:
+            market_task = self._market_client.create_task(task)
+            print(f"    {_C.DIM}Task ID: {market_task.id}{_C.RESET}")
+            print(f"    {_C.DIM}Status: {market_task.status}{_C.RESET}")
+            if "bounty" in task:
+                print(f"    {_C.DIM}Bounty: ${task['bounty']}{_C.RESET}")
+            return True
+        except Exception as e:
+            print(f"    {_C.RED}Error: {e}{_C.RESET}")
+            return False
 
     def _print_market_summary(self, result: ApplyResult) -> None:
         print(f"\n{'═' * 60}")

@@ -11,6 +11,7 @@ automatically, with optional human review and Execution Market integration.
 from .runner import ApplyRunner, ApplyConfig, ApplyResult, CyclicDependencyError
 from .modes import InteractiveMode, AutoMode, HybridMode, MarketMode
 from .verify import verify_implementation, VerificationResult, VerificationLevel
+from .market_client import MarketClient, MarketTask, MarketAPIError
 from .agents import (
     AgentBackend,
     AgentResult,
@@ -52,4 +53,8 @@ __all__ = [
     "verify_implementation",
     "VerificationResult",
     "VerificationLevel",
+    # Market Client
+    "MarketClient",
+    "MarketTask",
+    "MarketAPIError",
 ]

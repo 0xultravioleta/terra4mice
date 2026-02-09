@@ -34,15 +34,19 @@ class VerificationResult:
     git_diff_stats: Optional[str] = None      # Git diff --stat output
     git_changed_files: List[str] = field(default_factory=list)  # Files changed in git diff
     verification_details: List[str] = field(default_factory=list)  # Detailed verification info
+    ast_score: Optional[float] = None         # AST verification score (0.0-1.0)
+    ast_symbols_found: List[str] = field(default_factory=list)    # Symbols found in AST
+    ast_symbols_expected: List[str] = field(default_factory=list) # Symbols expected from spec
 
     def summary(self) -> str:
         status = "PASS" if self.passed else "FAIL"
         level_info = f" level={self.level.value}"
         git_info = f", git_changed={len(self.git_changed_files)}" if self.git_changed_files else ""
+        ast_info = f", ast_score={self.ast_score:.0%}" if self.ast_score is not None else ""
         return (
             f"[{status}] score={self.score:.0%}{level_info}, "
             f"files_checked={len(self.files_checked)}"
-            f"{git_info}, "
+            f"{git_info}{ast_info}, "
             f"missing_attributes={len(self.missing_attributes)}"
         )
 
@@ -104,13 +108,14 @@ def verify_implementation(
         result.passed = (basic_score == 1.0 and git_score == 1.0 and len(unique_files) > 0)
         return result
     
-    # FULL verification: Future implementation with tree-sitter
+    # FULL verification: tree-sitter AST verification
     if level == VerificationLevel.FULL:
-        # For now, fall back to GIT_DIFF behavior
         git_score = _verify_git_diff(unique_files, root, result)
-        result.score = min(basic_score, git_score)
-        result.passed = (basic_score == 1.0 and git_score == 1.0 and len(unique_files) > 0)
-        result.verification_details.append("FULL verification not yet implemented, using GIT_DIFF")
+        ast_score = _verify_ast_spec(resource, unique_files, root, result)
+        
+        # Weighted combination: 30% basic, 30% git diff, 40% AST spec match
+        result.score = (0.3 * basic_score + 0.3 * git_score + 0.4 * ast_score)
+        result.passed = (basic_score == 1.0 and git_score == 1.0 and ast_score > 0.0 and len(unique_files) > 0)
         return result
 
     return result
@@ -134,6 +139,89 @@ def _verify_basic_files(
             result.verification_details.append(f"✗ {filepath} missing or empty")
 
     return found / len(files) if files else 0.0
+
+
+def _verify_ast_spec(
+    resource: Resource,
+    files: List[str],
+    root: Path,
+    result: VerificationResult
+) -> float:
+    """Verify AST spec matches using tree-sitter analysis. Returns score 0.0-1.0."""
+    try:
+        from ..analyzers import analyze_file, score_against_spec, is_available
+    except ImportError:
+        result.verification_details.append("✗ analyzers module not available")
+        result.ast_score = 0.0
+        return 0.0
+    
+    if not is_available():
+        result.verification_details.append("✗ tree-sitter not available, falling back gracefully")
+        result.ast_score = 0.0
+        return 0.0
+    
+    total_score = 0.0
+    analyzed_files = 0
+    all_symbols_found = set()
+    
+    for filepath in files:
+        full_path = root / filepath
+        if not full_path.exists():
+            continue
+            
+        try:
+            with open(full_path, 'rb') as f:
+                source = f.read()
+            
+            analysis_result = analyze_file(str(filepath), source)
+            if analysis_result is None:
+                result.verification_details.append(f"✗ {filepath}: unsupported file type for AST analysis")
+                continue
+                
+            # Score this file's analysis against the resource attributes
+            file_score = score_against_spec(analysis_result, resource.attributes)
+            total_score += file_score
+            analyzed_files += 1
+            
+            # Collect all symbols found
+            all_symbols_found.update(analysis_result.all_names)
+            
+            if file_score > 0:
+                result.verification_details.append(f"✓ {filepath}: AST spec match {file_score:.0%}")
+            else:
+                result.verification_details.append(f"✗ {filepath}: AST spec match {file_score:.0%}")
+                
+        except Exception as e:
+            result.verification_details.append(f"✗ {filepath}: AST analysis error: {e}")
+            continue
+    
+    if analyzed_files == 0:
+        result.verification_details.append("✗ No files could be analyzed with AST")
+        result.ast_score = 0.0
+        return 0.0
+    
+    # Calculate average score across all analyzed files
+    avg_score = total_score / analyzed_files
+    result.ast_score = avg_score
+    result.ast_symbols_found = list(all_symbols_found)
+    
+    # Build list of expected symbols from resource attributes
+    expected_symbols = []
+    for attr_name in ["functions", "classes", "entities", "exports"]:
+        attr_value = resource.attributes.get(attr_name)
+        if isinstance(attr_value, list):
+            expected_symbols.extend(attr_value)
+        elif isinstance(attr_value, str):
+            expected_symbols.append(attr_value)
+    
+    result.ast_symbols_expected = expected_symbols
+    
+    if avg_score > 0.5:
+        result.verification_details.append(f"✓ AST verification passed with {avg_score:.0%} match")
+    else:
+        result.verification_details.append(f"✗ AST verification failed with {avg_score:.0%} match")
+    
+    return avg_score
 
 
 def _verify_git_diff(

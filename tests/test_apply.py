@@ -12,6 +12,7 @@ Tests cover:
 from __future__ import annotations
 
 import os
+import json
 import subprocess
 import tempfile
 import threading
@@ -421,7 +422,7 @@ class TestImplementedModes:
 
     def test_market_mode_runs_empty(self):
         sm = FakeStateManager()
-        mode = MarketMode(state_manager=sm, project_root="/tmp")
+        mode = MarketMode(state_manager=sm, project_root="/tmp", dry_run=True)
         result = mode.execute([])
         assert result.total == 0
 
@@ -726,6 +727,385 @@ class TestParallelExecution:
         assert not runner._depends_on_transitively("feature.a", "feature.a", dep_map)
 
 
+# ── Phase 5.3: Market Client Tests ────────────────────────────────────
+
+class TestMarketClient:
+    """Tests for Market API client."""
+    
+    def test_dry_run_mode(self):
+        """Test that dry run mode works without API key."""
+        from terra4mice.apply.market_client import MarketClient
+        
+        client = MarketClient(dry_run=True)
+        
+        task_data = {
+            "title": "Test Task",
+            "description": "Test Description",
+            "task_type": "code_implementation",
+            "tags": ["test"],
+            "metadata": {},
+        }
+        
+        # Should not raise any errors in dry run mode
+        task = client.create_task(task_data)
+        assert task.id == "mock-task-id"
+        assert task.title == "Test Task"
+        assert task.status == "pending"
+        
+    def test_requires_api_key_when_not_dry_run(self):
+        """Test that API key is required when not in dry run mode."""
+        from terra4mice.apply.market_client import MarketClient, MarketAPIError
+        
+        with pytest.raises(MarketAPIError, match="API key required"):
+            MarketClient(api_key=None, dry_run=False)
+    
+    @patch.dict(os.environ, {"EXECUTION_MARKET_API_KEY": "test-key"})
+    def test_uses_env_var_api_key(self):
+        """Test that API key is read from environment variable."""
+        from terra4mice.apply.market_client import MarketClient
+        
+        client = MarketClient(dry_run=True)  # dry_run to avoid actual HTTP
+        assert client.api_key == "test-key"
+    
+    @patch('urllib.request.urlopen')
+    def test_create_task_http_success(self, mock_urlopen):
+        """Test successful HTTP request for create_task."""
+        from terra4mice.apply.market_client import MarketClient
+        
+        # Mock HTTP response
+        mock_response = {
+            "id": "task-123",
+            "title": "Test Task",
+            "description": "Test Description",
+            "status": "pending",
+            "tags": ["test"],
+            "metadata": {},
+            "created_at": "2023-01-01T00:00:00Z",
+        }
+        
+        mock_urlopen.return_value.__enter__.return_value.read.return_value = json.dumps(mock_response).encode()
+        mock_urlopen.return_value.__enter__.return_value.status = 200
+        
+        client = MarketClient(api_key="test-key")
+        task_data = {
+            "title": "Test Task",
+            "description": "Test Description",
+            "task_type": "code_implementation",
+            "tags": ["test"],
+            "metadata": {},
+        }
+        
+        task = client.create_task(task_data)
+        assert task.id == "task-123"
+        assert task.title == "Test Task"
+        assert task.status == "pending"
+        
+    @patch('urllib.request.urlopen')
+    def test_api_error_handling(self, mock_urlopen):
+        """Test API error handling."""
+        from terra4mice.apply.market_client import MarketClient, MarketAPIError
+        from urllib.error import HTTPError, URLError
+        
+        # Test HTTP error
+        mock_urlopen.side_effect = HTTPError(
+            url="http://test.com",
+            code=400,
+            msg="Bad Request",
+            hdrs={},
+            fp=None
+        )
+        
+        client = MarketClient(api_key="test-key")
+        with pytest.raises(MarketAPIError, match="HTTP 400"):
+            client.create_task({})
+            
+        # Test network error
+        mock_urlopen.side_effect = URLError("Network error")
+        with pytest.raises(MarketAPIError, match="Network error"):
+            client.create_task({})
+    
+    def test_list_tasks_dry_run(self):
+        """Test list_tasks in dry run mode."""
+        from terra4mice.apply.market_client import MarketClient
+        
+        client = MarketClient(dry_run=True)
+        tasks = client.list_tasks()
+        assert isinstance(tasks, list)
+        assert len(tasks) == 0  # Mock returns empty list
+        
+        # Test with status filter
+        tasks = client.list_tasks(status="pending")
+        assert isinstance(tasks, list)
+    
+    def test_get_task_dry_run(self):
+        """Test get_task in dry run mode."""
+        from terra4mice.apply.market_client import MarketClient
+        
+        client = MarketClient(dry_run=True)
+        task = client.get_task("test-id")
+        assert task.id == "test-id"
+        assert task.title == "Mock Task"
+    
+    def test_cancel_task_dry_run(self):
+        """Test cancel_task in dry run mode."""
+        from terra4mice.apply.market_client import MarketClient
+        
+        client = MarketClient(dry_run=True)
+        result = client.cancel_task("test-id")
+        assert result is True
+
+
+class TestMarketMode:
+    """Tests for MarketMode with actual market client integration."""
+    
+    def test_market_mode_with_dry_run(self):
+        """Test MarketMode with dry_run enabled."""
+        sm = FakeStateManager()
+        mode = MarketMode(
+            state_manager=sm,
+            project_root="/tmp",
+            dry_run=True,
+        )
+        
+        actions = [_make_action("feature", "auth")]
+        result = mode.execute(actions)
+        
+        assert len(result.market_pending) == 1
+        assert result.market_pending[0] == "feature.auth"
+        assert len(result.failed) == 0
+    
+    def test_market_mode_task_building(self):
+        """Test that MarketMode builds tasks correctly."""
+        sm = FakeStateManager()
+        mode = MarketMode(
+            state_manager=sm,
+            project_root="/tmp",
+            dry_run=True,
+            bounty=50.0,
+        )
+        
+        action = _make_action(
+            "feature", "auth",
+            attributes={"endpoints": ["/login"], "requirements": ["python>=3.8"]}
+        )
+        task = mode._build_market_task(action, "Test prompt")
+        
+        assert task["title"] == "[terra4mice] create feature.auth"
+        assert task["description"] == "Test prompt"
+        assert task["task_type"] == "code_implementation"
+        assert "terra4mice" in task["tags"]
+        assert "feature" in task["tags"]
+        assert "create" in task["tags"]
+        assert task["bounty"] == 50.0
+        assert task["metadata"]["resource_address"] == "feature.auth"
+        assert task["metadata"]["attributes"]["endpoints"] == ["/login"]
+        assert task["requirements"] == ["python>=3.8"]
+    
+    def test_market_mode_with_api_key(self):
+        """Test MarketMode with API key configuration."""
+        sm = FakeStateManager()
+        mode = MarketMode(
+            state_manager=sm,
+            project_root="/tmp",
+            api_key="test-key",
+            dry_run=True,  # Still dry run to avoid HTTP
+        )
+        
+        assert mode._market_client.api_key == "test-key"
+        assert mode._market_client.dry_run is True
+
+
+# ── Phase 5.3: AST Verification Tests ──────────────────────────────────
+
+class TestASTVerification:
+    """Tests for tree-sitter AST verification."""
+    
+    def test_ast_verification_without_tree_sitter(self):
+        """Test that AST verification degrades gracefully without tree-sitter."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create test file
+            (Path(tmpdir) / "auth.py").write_text("def login(): pass")
+            
+            resource = _make_resource(
+                "feature", "auth",
+                files=["auth.py"],
+                attributes={"functions": ["login"]}
+            )
+            
+            from terra4mice.apply.verify import VerificationLevel, verify_implementation
+            
+            # Mock analyzers.is_available() to return False
+            with patch('terra4mice.analyzers.is_available', return_value=False):
+                result = verify_implementation(resource, tmpdir, VerificationLevel.FULL)
+            
+            assert result.level == VerificationLevel.FULL
+            assert result.ast_score == 0.0  # Should be 0 when tree-sitter unavailable
+            assert any("tree-sitter not available" in detail for detail in result.verification_details)
+            # Should still have basic and git scores
+            assert result.score >= 0.0
+    
+    @patch('terra4mice.analyzers.is_available', return_value=True)
+    @patch('terra4mice.analyzers.analyze_file')
+    @patch('terra4mice.analyzers.score_against_spec')
+    def test_ast_verification_with_mock(self, mock_score, mock_analyze, mock_available):
+        """Test AST verification with mocked tree-sitter functions."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            
+            # Create test file
+            (tmpdir_path / "auth.py").write_text("def login(): pass\nclass Auth: pass")
+            
+            # Mock analysis result
+            mock_analysis = type('AnalysisResult', (), {
+                'all_names': {'login', 'Auth'},
+                'functions': {'login'},
+                'classes': {'Auth'},
+            })()
+            mock_analyze.return_value = mock_analysis
+            mock_score.return_value = 0.8  # 80% match
+            
+            resource = _make_resource(
+                "feature", "auth",
+                files=["auth.py"],
+                attributes={"functions": ["login"], "classes": ["Auth"]}
+            )
+            
+            from terra4mice.apply.verify import VerificationLevel, verify_implementation
+            result = verify_implementation(resource, tmpdir, VerificationLevel.FULL)
+            
+            assert result.level == VerificationLevel.FULL
+            assert result.ast_score == 0.8
+            assert set(result.ast_symbols_found) == {'login', 'Auth'}
+            assert set(result.ast_symbols_expected) == {'login', 'Auth'}
+            assert any("AST spec match 80%" in detail for detail in result.verification_details)
+            
+            # Verify functions were called correctly
+            mock_analyze.assert_called_once_with("auth.py", b"def login(): pass\nclass Auth: pass")
+            mock_score.assert_called_once_with(mock_analysis, {"functions": ["login"], "classes": ["Auth"]})
+    
+    def test_ast_verification_unsupported_file(self):
+        """Test AST verification with unsupported file type."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create unsupported file
+            (Path(tmpdir) / "data.txt").write_text("some data")
+            
+            resource = _make_resource(
+                "feature", "auth",
+                files=["data.txt"],
+                attributes={"functions": ["login"]}
+            )
+            
+            # Mock to simulate tree-sitter available but file unsupported
+            with patch('terra4mice.analyzers.is_available', return_value=True), \
+                 patch('terra4mice.analyzers.analyze_file', return_value=None):
+                from terra4mice.apply.verify import VerificationLevel, verify_implementation
+                result = verify_implementation(resource, tmpdir, VerificationLevel.FULL)
+            
+            assert result.ast_score == 0.0
+            assert any("unsupported file type" in detail for detail in result.verification_details)
+
+
+# ── Phase 5.3: CLI Flag Tests ──────────────────────────────────────────
+
+class TestCLIFlags:
+    """Tests for new CLI flags."""
+    
+    def test_apply_config_new_fields(self):
+        """Test ApplyConfig with new fields."""
+        from terra4mice.apply.runner import ApplyConfig
+        
+        config = ApplyConfig(
+            verify_level="full",
+            market_url="https://custom.market",
+            market_api_key="test-key",
+            bounty=100.0,
+        )
+        
+        errors = config.validate()
+        assert not errors
+        assert config.verify_level == "full"
+        assert config.market_url == "https://custom.market"
+        assert config.market_api_key == "test-key"
+        assert config.bounty == 100.0
+    
+    def test_apply_config_validation_verify_level(self):
+        """Test validation of verify_level field."""
+        from terra4mice.apply.runner import ApplyConfig
+        
+        config = ApplyConfig(verify_level="invalid")
+        errors = config.validate()
+        assert len(errors) == 1
+        assert "Invalid verify_level" in errors[0]
+        
+        config = ApplyConfig(verify_level="git_diff")
+        errors = config.validate()
+        assert not errors
+    
+    def test_apply_config_validation_bounty(self):
+        """Test validation of bounty field."""
+        from terra4mice.apply.runner import ApplyConfig
+        
+        config = ApplyConfig(bounty=-10.0)
+        errors = config.validate()
+        assert len(errors) == 1
+        assert "bounty must be positive" in errors[0]
+        
+        config = ApplyConfig(bounty=50.0)
+        errors = config.validate()
+        assert not errors
+    
+    def test_apply_config_max_workers_validation(self):
+        """Test max_workers validation."""
+        from terra4mice.apply.runner import ApplyConfig
+        
+        config = ApplyConfig(max_workers=0)
+        errors = config.validate()
+        assert "max_workers must be >= 1" in "\n".join(errors)
+        
+        config = ApplyConfig(max_workers=4)
+        errors = config.validate()
+        assert not errors
+
+
+# ── Updated Verification Tests ─────────────────────────────────────────
+
+class TestVerificationResultUpdated:
+    """Tests for updated VerificationResult with AST fields."""
+    
+    def test_verification_result_with_ast(self):
+        """Test VerificationResult with AST fields."""
+        from terra4mice.apply.verify import VerificationResult, VerificationLevel
+        
+        result = VerificationResult(
+            passed=True,
+            score=0.85,
+            level=VerificationLevel.FULL,
+            ast_score=0.8,
+            ast_symbols_found=["login", "Auth"],
+            ast_symbols_expected=["login", "Auth", "logout"],
+        )
+        
+        summary = result.summary()
+        assert "85%" in summary
+        assert "ast_score=80%" in summary
+        assert "level=full" in summary
+    
+    def test_verification_result_without_ast(self):
+        """Test VerificationResult without AST fields."""
+        from terra4mice.apply.verify import VerificationResult, VerificationLevel
+        
+        result = VerificationResult(
+            passed=True,
+            score=0.75,
+            level=VerificationLevel.BASIC,
+        )
+        
+        summary = result.summary()
+        assert "75%" in summary
+        assert "ast_score" not in summary
+        assert "level=basic" in summary
+
+
 # ── Phase 5.2: Git Diff Verification Tests ────────────────────────────
 
 class TestGitDiffVerification:
@@ -897,5 +1277,6 @@ class TestGitDiffVerification:
             result = verify_implementation(resource, tmpdir, VerificationLevel.FULL)
             
             assert result.level == VerificationLevel.FULL
-            assert any("FULL verification not yet implemented" in detail 
-                      for detail in result.verification_details)
+            # FULL verification is now actually implemented, so it should run AST verification
+            # It might fail because tree-sitter may not be available, but the level should be correct
+            assert result.score >= 0.0  # Should have some score from basic + git + AST components

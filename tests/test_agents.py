@@ -618,6 +618,7 @@ class TestMarketMode:
             state_manager=sm,
             config=ApplyConfig(mode="market"),
             project_root="/tmp",
+            dry_run=True,
         )
         actions = [_make_action(), _make_action(name="logout")]
         result = mode.execute(actions)
@@ -631,6 +632,7 @@ class TestMarketMode:
             state_manager=sm,
             config=ApplyConfig(mode="market"),
             project_root="/tmp",
+            dry_run=True,
         )
         action = _make_action(
             attributes={"language": "python"},
@@ -640,7 +642,7 @@ class TestMarketMode:
             action, "Full prompt here"
         )
         assert "terra4mice" in task["title"]
-        assert task["type"] == "code_implementation"
+        assert task["task_type"] == "code_implementation"
         assert "terra4mice" in task["tags"]
         assert task["metadata"]["resource_address"] == "feature.auth"
         assert task["metadata"]["action"] == "create"
@@ -652,6 +654,7 @@ class TestMarketMode:
             config=ApplyConfig(mode="market"),
             market_url="https://custom.market",
             project_root="/tmp",
+            dry_run=True,
         )
         assert mode._market_url == "https://custom.market"
 
