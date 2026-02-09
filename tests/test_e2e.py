@@ -543,12 +543,12 @@ class TestE2EMultiResourceDAG:
             mock_handler.return_value = TrackingMode()
             result = runner.run()
 
-        # Root nodes (no deps) must be implemented
+        # All 7 resources should be implemented (bug fix: stale ready_actions)
+        assert len(result.implemented) == 7
         assert "module.database" in result.implemented
         assert "module.config" in result.implemented
-        # All 7 resources must be accounted for (implemented or skipped)
-        assert len(result.implemented) + len(result.skipped) == 7
         assert len(result.failed) == 0
+        assert len(result.skipped) == 0
 
 
 # ═══════════════════════════════════════════════════════════════════════
