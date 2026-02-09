@@ -12,7 +12,9 @@ Tests cover:
 from __future__ import annotations
 
 import os
+import subprocess
 import tempfile
+import threading
 from pathlib import Path
 from unittest.mock import patch
 import pytest
@@ -541,3 +543,359 @@ class TestApplyRunnerIntegration:
         runner = ApplyRunner(spec, sm, config=config)
         result = runner.run(resource="feature.nonexistent")
         assert result.total == 0
+
+
+# ── Phase 5.2: Parallel Execution Tests ──────────────────────────────
+
+class TestParallelExecution:
+    """Tests for parallel execution engine."""
+
+    def test_config_validation_max_workers(self):
+        config = ApplyConfig(max_workers=0)
+        errors = config.validate()
+        assert "max_workers must be >= 1" in "\n".join(errors)
+
+        config = ApplyConfig(max_workers=4)
+        errors = config.validate()
+        assert not errors
+
+    def test_parallel_execution_disabled_by_default(self):
+        """With max_workers=1, should use sequential execution."""
+        actions = [
+            _make_action("feature", "a"),
+            _make_action("feature", "b"),
+        ]
+        spec, state = _make_spec_and_state([a.resource for a in actions])
+        sm = FakeStateManager(state)
+        
+        # Mock mode handler to track execution order
+        execution_order = []
+        
+        class MockMode:
+            def __init__(self, **kwargs):
+                pass
+            
+            def execute(self, actions):
+                # Record the addresses in order
+                execution_order.extend([a.resource.address for a in actions])
+                result = ApplyResult()
+                result.implemented = [a.resource.address for a in actions]
+                return result
+        
+        config = ApplyConfig(max_workers=1)  # Sequential
+        runner = ApplyRunner(spec, sm, config=config)
+        
+        # Mock the mode handler
+        with patch.object(runner, '_get_mode_handler', return_value=MockMode()):
+            result = runner.run()
+        
+        assert len(execution_order) == 2
+        assert result.total == 2
+
+    def test_parallel_execution_enabled(self):
+        """With max_workers>1, should use parallel execution."""
+        actions = [
+            _make_action("feature", "a"),
+            _make_action("feature", "b"),  # No dependencies, can run in parallel
+        ]
+        spec, state = _make_spec_and_state([a.resource for a in actions])
+        sm = FakeStateManager(state)
+        
+        config = ApplyConfig(max_workers=2)  # Parallel
+        runner = ApplyRunner(spec, sm, config=config)
+        
+        # Mock mode handler
+        execution_count = []
+        
+        class MockMode:
+            def __init__(self, **kwargs):
+                pass
+                
+            def execute(self, actions):
+                execution_count.append(len(actions))
+                result = ApplyResult()
+                result.implemented = [a.resource.address for a in actions]
+                return result
+        
+        with patch.object(runner, '_get_mode_handler', return_value=MockMode()):
+            result = runner.run()
+        
+        # Should have executed single actions (parallel)
+        assert all(count == 1 for count in execution_count)
+        assert len(execution_count) == 2  # Two parallel executions
+        assert result.total == 2
+
+    def test_parallel_execution_respects_dependencies(self):
+        """Dependencies should be respected even in parallel mode."""
+        actions = [
+            _make_action("feature", "auth"),
+            _make_action("feature", "login", depends_on=["feature.auth"]),
+            _make_action("feature", "logout", depends_on=["feature.auth"]),
+        ]
+        spec, state = _make_spec_and_state([a.resource for a in actions])
+        sm = FakeStateManager(state)
+        
+        execution_order = []
+        execution_lock = threading.Lock()
+        
+        class MockMode:
+            def __init__(self, **kwargs):
+                pass
+                
+            def execute(self, actions):
+                with execution_lock:
+                    execution_order.extend([a.resource.address for a in actions])
+                
+                result = ApplyResult()
+                result.implemented = [a.resource.address for a in actions]
+                return result
+        
+        config = ApplyConfig(max_workers=3)
+        runner = ApplyRunner(spec, sm, config=config)
+        
+        with patch.object(runner, '_get_mode_handler', return_value=MockMode()):
+            result = runner.run()
+        
+        # auth should execute first, then login/logout can execute in parallel
+        assert execution_order[0] == "feature.auth"
+        assert "feature.login" in execution_order[1:]
+        assert "feature.logout" in execution_order[1:]
+        assert result.total == 3
+
+    def test_parallel_execution_failure_skips_dependents(self):
+        """Failed resources should cause dependents to be skipped."""
+        actions = [
+            _make_action("feature", "base"),
+            _make_action("feature", "depends_on_base", depends_on=["feature.base"]),
+        ]
+        spec, state = _make_spec_and_state([a.resource for a in actions])
+        sm = FakeStateManager(state)
+        
+        class MockMode:
+            def __init__(self, **kwargs):
+                pass
+                
+            def execute(self, actions):
+                result = ApplyResult()
+                for action in actions:
+                    if action.resource.address == "feature.base":
+                        result.failed.append(action.resource.address)
+                    else:
+                        result.implemented.append(action.resource.address)
+                return result
+        
+        config = ApplyConfig(max_workers=2)
+        runner = ApplyRunner(spec, sm, config=config)
+        
+        with patch.object(runner, '_get_mode_handler', return_value=MockMode()):
+            result = runner.run()
+        
+        assert "feature.base" in result.failed
+        assert "feature.depends_on_base" in result.skipped
+        assert len(result.implemented) == 0
+
+    def test_transitive_dependency_detection(self):
+        """Test _depends_on_transitively helper."""
+        actions = [
+            _make_action("feature", "a"),
+            _make_action("feature", "b", depends_on=["feature.a"]),
+            _make_action("feature", "c", depends_on=["feature.b"]),
+            _make_action("feature", "d"),  # Independent
+        ]
+        spec, state = _make_spec_and_state([a.resource for a in actions])
+        sm = FakeStateManager(state)
+        runner = ApplyRunner(spec, sm)
+        
+        dep_map = {
+            "feature.a": set(),
+            "feature.b": {"feature.a"},
+            "feature.c": {"feature.b"},
+            "feature.d": set(),
+        }
+        
+        # Test direct dependency
+        assert runner._depends_on_transitively("feature.b", "feature.a", dep_map)
+        
+        # Test transitive dependency
+        assert runner._depends_on_transitively("feature.c", "feature.a", dep_map)
+        
+        # Test no dependency
+        assert not runner._depends_on_transitively("feature.d", "feature.a", dep_map)
+        
+        # Test self-reference (should be False)
+        assert not runner._depends_on_transitively("feature.a", "feature.a", dep_map)
+
+
+# ── Phase 5.2: Git Diff Verification Tests ────────────────────────────
+
+class TestGitDiffVerification:
+    """Tests for git diff-based verification."""
+
+    def test_verification_level_enum(self):
+        """Test VerificationLevel enum values."""
+        from terra4mice.apply.verify import VerificationLevel
+        
+        assert VerificationLevel.BASIC.value == "basic"
+        assert VerificationLevel.GIT_DIFF.value == "git_diff"
+        assert VerificationLevel.FULL.value == "full"
+
+    def test_verification_result_with_git_info(self):
+        """Test VerificationResult includes git diff information."""
+        from terra4mice.apply.verify import VerificationResult, VerificationLevel
+        
+        result = VerificationResult(
+            level=VerificationLevel.GIT_DIFF,
+            git_changed_files=["src/auth.py", "tests/test_auth.py"],
+            git_diff_stats="2 files changed, 15 insertions(+), 3 deletions(-)"
+        )
+        
+        summary = result.summary()
+        assert "level=git_diff" in summary
+        assert "git_changed=2" in summary
+
+    def test_basic_verification_still_works(self):
+        """Test that BASIC verification still works as before."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create test files
+            (Path(tmpdir) / "auth.py").write_text("def login(): pass")
+            (Path(tmpdir) / "empty.py").write_text("")  # Empty file
+            
+            resource = _make_resource(
+                "feature", "auth", 
+                files=["auth.py", "missing.py", "empty.py"]
+            )
+            
+            result = verify_implementation(resource, tmpdir)
+            
+            assert not result.passed  # missing.py doesn't exist, empty.py is empty
+            assert result.score < 1.0
+            assert "file missing or empty: missing.py" in result.missing_attributes
+            assert "file missing or empty: empty.py" in result.missing_attributes
+
+    def test_git_diff_verification_no_git(self):
+        """Test git diff verification when git is not available."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create test file
+            (Path(tmpdir) / "auth.py").write_text("def login(): pass")
+            
+            resource = _make_resource("feature", "auth", files=["auth.py"])
+            
+            # Test in directory without git
+            from terra4mice.apply.verify import VerificationLevel
+            result = verify_implementation(resource, tmpdir, VerificationLevel.GIT_DIFF)
+            
+            assert not result.passed  # Should fail without git
+            assert result.score == 0.0  # Git verification failed
+            assert any("Git diff failed" in detail or "not a git repository" in detail.lower() 
+                      for detail in result.verification_details)
+
+    def test_git_diff_verification_no_changes(self):
+        """Test git diff verification when no changes are detected."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            
+            # Initialize git repo
+            subprocess.run(["git", "init"], cwd=tmpdir, check=True, capture_output=True)
+            subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=tmpdir, check=True)
+            subprocess.run(["git", "config", "user.name", "Test User"], cwd=tmpdir, check=True)
+            
+            # Create and commit file
+            (tmpdir_path / "auth.py").write_text("def login(): pass")
+            subprocess.run(["git", "add", "."], cwd=tmpdir, check=True, capture_output=True)
+            subprocess.run(["git", "commit", "-m", "initial"], cwd=tmpdir, check=True, capture_output=True)
+            
+            resource = _make_resource("feature", "auth", files=["auth.py"])
+            
+            from terra4mice.apply.verify import VerificationLevel
+            result = verify_implementation(resource, tmpdir, VerificationLevel.GIT_DIFF)
+            
+            assert not result.passed  # Should fail - no changes in git diff
+            assert result.level == VerificationLevel.GIT_DIFF
+            assert any("no changes" in detail.lower() for detail in result.verification_details)
+
+    def test_git_diff_verification_with_changes(self):
+        """Test git diff verification when changes are detected."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            
+            # Initialize git repo
+            subprocess.run(["git", "init"], cwd=tmpdir, check=True, capture_output=True)
+            subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=tmpdir, check=True)
+            subprocess.run(["git", "config", "user.name", "Test User"], cwd=tmpdir, check=True)
+            
+            # Create and commit initial file
+            (tmpdir_path / "auth.py").write_text("def login(): pass")
+            subprocess.run(["git", "add", "."], cwd=tmpdir, check=True, capture_output=True)
+            subprocess.run(["git", "commit", "-m", "initial"], cwd=tmpdir, check=True, capture_output=True)
+            
+            # Modify the file
+            (tmpdir_path / "auth.py").write_text("def login(): pass\ndef logout(): pass")
+            
+            resource = _make_resource("feature", "auth", files=["auth.py"])
+            
+            from terra4mice.apply.verify import VerificationLevel
+            result = verify_implementation(resource, tmpdir, VerificationLevel.GIT_DIFF)
+            
+            assert result.passed  # Should pass - changes detected
+            assert result.level == VerificationLevel.GIT_DIFF
+            assert "auth.py" in result.git_changed_files
+            assert result.git_diff_stats is not None
+            assert any("changes to expected files" in detail for detail in result.verification_details)
+
+    def test_git_diff_verification_wrong_files_changed(self):
+        """Test git diff verification when wrong files are changed."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            
+            # Initialize git repo
+            subprocess.run(["git", "init"], cwd=tmpdir, check=True, capture_output=True)
+            subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=tmpdir, check=True)
+            subprocess.run(["git", "config", "user.name", "Test User"], cwd=tmpdir, check=True)
+            
+            # Create and commit files
+            (tmpdir_path / "auth.py").write_text("def login(): pass")
+            (tmpdir_path / "other.py").write_text("def other(): pass")
+            subprocess.run(["git", "add", "."], cwd=tmpdir, check=True, capture_output=True)
+            subprocess.run(["git", "commit", "-m", "initial"], cwd=tmpdir, check=True, capture_output=True)
+            
+            # Modify the wrong file
+            (tmpdir_path / "other.py").write_text("def other(): pass\ndef modified(): pass")
+            
+            # Resource expects auth.py to be changed
+            resource = _make_resource("feature", "auth", files=["auth.py"])
+            
+            from terra4mice.apply.verify import VerificationLevel
+            result = verify_implementation(resource, tmpdir, VerificationLevel.GIT_DIFF)
+            
+            assert not result.passed  # Should fail - wrong files changed
+            assert "other.py" in result.git_changed_files
+            assert "auth.py" not in result.git_changed_files
+            assert any("shows changes to other.py but expected auth.py" in detail 
+                      for detail in result.verification_details)
+
+    def test_full_verification_level_fallback(self):
+        """Test FULL verification level falls back to GIT_DIFF for now."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            
+            # Initialize git repo
+            subprocess.run(["git", "init"], cwd=tmpdir, check=True, capture_output=True)
+            subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=tmpdir, check=True)
+            subprocess.run(["git", "config", "user.name", "Test User"], cwd=tmpdir, check=True)
+            
+            # Create and commit file
+            (tmpdir_path / "auth.py").write_text("def login(): pass")
+            subprocess.run(["git", "add", "."], cwd=tmpdir, check=True, capture_output=True)
+            subprocess.run(["git", "commit", "-m", "initial"], cwd=tmpdir, check=True, capture_output=True)
+            
+            # Modify the file
+            (tmpdir_path / "auth.py").write_text("def login(): pass\ndef logout(): pass")
+            
+            resource = _make_resource("feature", "auth", files=["auth.py"])
+            
+            from terra4mice.apply.verify import VerificationLevel
+            result = verify_implementation(resource, tmpdir, VerificationLevel.FULL)
+            
+            assert result.level == VerificationLevel.FULL
+            assert any("FULL verification not yet implemented" in detail 
+                      for detail in result.verification_details)

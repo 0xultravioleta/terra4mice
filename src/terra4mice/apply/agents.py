@@ -374,11 +374,106 @@ class CallableAgent(AgentBackend):
         return self._fn(prompt, Path(project_root), timeout_seconds)
 
 
+class ChainedAgent(AgentBackend):
+    """
+    Agent backend that tries multiple agents in order, falling back on failure.
+    
+    Useful for implementing fallback strategies where you want to try
+    a preferred agent first, but fall back to alternatives if it fails.
+    """
+
+    def __init__(
+        self,
+        agents: list[AgentBackend],
+        name: str = "chained",
+        stop_on_first_success: bool = True,
+    ):
+        """
+        Initialize ChainedAgent.
+        
+        Args:
+            agents: List of agent backends to try in order.
+            name: Name of this chained agent.
+            stop_on_first_success: If True, stop on first successful agent.
+        """
+        if not agents:
+            raise ValueError("ChainedAgent requires at least one agent")
+        
+        self.agents = agents
+        self.name = name
+        self.stop_on_first_success = stop_on_first_success
+        
+        # Track which agent succeeded for the last execution
+        self.last_successful_agent: Optional[str] = None
+        self.attempt_count: int = 0
+
+    def execute(
+        self,
+        prompt: str,
+        project_root: str | Path,
+        timeout_seconds: int = 300,
+    ) -> AgentResult:
+        """
+        Try each agent in order until one succeeds or all fail.
+        
+        Returns the result from the first successful agent, or a combined
+        error result if all agents fail.
+        """
+        start = time.time()
+        self.attempt_count += 1
+        self.last_successful_agent = None
+        
+        errors: list[str] = []
+        all_outputs: list[str] = []
+        
+        for i, agent in enumerate(self.agents):
+            try:
+                result = agent.execute(prompt, project_root, timeout_seconds)
+                
+                # Track outputs regardless of success
+                if result.output:
+                    all_outputs.append(f"Agent {agent.name}: {result.output}")
+                
+                if result.success:
+                    # Success! Track which agent worked and return result
+                    self.last_successful_agent = agent.name
+                    result.output = f"[ChainedAgent] Success with {agent.name} (attempt {i+1}/{len(self.agents)})\n" + result.output
+                    return result
+                else:
+                    # Failed, add to errors and continue
+                    errors.append(f"Agent {agent.name}: {result.error}")
+                    
+            except Exception as e:
+                errors.append(f"Agent {agent.name}: Exception: {e}")
+        
+        # All agents failed
+        duration = time.time() - start
+        combined_error = "\n".join([
+            f"[ChainedAgent] All {len(self.agents)} agents failed:",
+            *errors
+        ])
+        
+        combined_output = "\n".join(all_outputs) if all_outputs else ""
+        
+        return AgentResult(
+            success=False,
+            output=combined_output,
+            error=combined_error,
+            duration_seconds=duration,
+            exit_code=-1,
+        )
+
+    def is_available(self) -> bool:
+        """Check if at least one agent in the chain is available."""
+        return any(agent.is_available() for agent in self.agents)
+
+
 # ── Agent Registry ────────────────────────────────────────────────────
 
 _KNOWN_AGENTS: dict[str, type[AgentBackend]] = {
     "claude-code": ClaudeCodeAgent,
     "codex": CodexAgent,
+    "chained": ChainedAgent,
 }
 
 
@@ -387,7 +482,8 @@ def get_agent(name: str, **kwargs) -> AgentBackend:
     Get an agent backend by name.
 
     Args:
-        name: Agent identifier (e.g., "claude-code", "codex").
+        name: Agent identifier (e.g., "claude-code", "codex") or comma-separated 
+              list for chained agents (e.g., "claude-code,codex").
         **kwargs: Passed to the agent constructor.
 
     Returns:
@@ -396,12 +492,34 @@ def get_agent(name: str, **kwargs) -> AgentBackend:
     Raises:
         ValueError: If agent name is unknown.
     """
+    # Check if this is a chained agent specification (comma-separated)
+    if "," in name:
+        agent_names = [n.strip() for n in name.split(",") if n.strip()]  # Filter empty strings
+        agents = []
+        for agent_name in agent_names:
+            if agent_name not in _KNOWN_AGENTS:
+                raise ValueError(
+                    f"Unknown agent in chain: {agent_name!r}. "
+                    f"Available: {', '.join(sorted(_KNOWN_AGENTS.keys() - {'chained'}))}"
+                )
+            # Don't pass kwargs to individual agents in chain
+            agents.append(_KNOWN_AGENTS[agent_name]())
+        
+        # Create ChainedAgent with the list of agents
+        return ChainedAgent(agents, name=f"chained({','.join(agent_names)})", **kwargs)
+    
     cls = _KNOWN_AGENTS.get(name)
     if cls is None:
         raise ValueError(
             f"Unknown agent: {name!r}. "
             f"Available: {', '.join(sorted(_KNOWN_AGENTS))}"
         )
+    
+    # Special handling for ChainedAgent - it needs a list of agents
+    if cls == ChainedAgent:
+        if "agents" not in kwargs:
+            raise ValueError("ChainedAgent requires 'agents' parameter")
+    
     return cls(**kwargs)
 
 

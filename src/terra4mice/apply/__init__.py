@@ -10,7 +10,7 @@ automatically, with optional human review and Execution Market integration.
 
 from .runner import ApplyRunner, ApplyConfig, ApplyResult, CyclicDependencyError
 from .modes import InteractiveMode, AutoMode, HybridMode, MarketMode
-from .verify import verify_implementation, VerificationResult
+from .verify import verify_implementation, VerificationResult, VerificationLevel
 from .agents import (
     AgentBackend,
     AgentResult,
@@ -19,6 +19,7 @@ from .agents import (
     ClaudeCodeAgent,
     CodexAgent,
     CallableAgent,
+    ChainedAgent,
     get_agent,
     register_agent,
     list_agents,
@@ -43,10 +44,12 @@ __all__ = [
     "ClaudeCodeAgent",
     "CodexAgent",
     "CallableAgent",
+    "ChainedAgent",
     "get_agent",
     "register_agent",
     "list_agents",
     # Verification
     "verify_implementation",
     "VerificationResult",
+    "VerificationLevel",
 ]
