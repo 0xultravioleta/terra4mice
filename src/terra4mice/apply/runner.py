@@ -340,12 +340,17 @@ class ApplyRunner:
                         # "skipped" doesn't block dependents
                 
                 # Break if no progress can be made
-                if not futures and not ready_actions and remaining_actions:
-                    # This means we have remaining actions but none are ready
-                    # This shouldn't happen with proper DAG, but handle gracefully
-                    for action in remaining_actions:
-                        result.skipped.append(action.resource.address)
-                    break
+                # Re-check readiness since completed set may have been updated
+                if not futures and remaining_actions:
+                    new_ready = [
+                        action for action in remaining_actions
+                        if is_ready(action) and action.resource.address not in running
+                    ]
+                    if not new_ready:
+                        # Truly stuck — no futures running, nothing ready
+                        for action in remaining_actions:
+                            result.skipped.append(action.resource.address)
+                        break
         
         return result
     

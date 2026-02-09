@@ -207,21 +207,92 @@ terra4mice mark feature.auth_logout --status broken --reason "Tests failing"
 
 ### `terra4mice apply`
 
-Interactive apply loop:
+Context-aware apply engine with DAG ordering and multiple execution modes:
+
+```bash
+# Interactive mode (default) — manual implementation with guidance
+terra4mice apply
+
+# Auto mode — AI agent implements resources automatically
+terra4mice apply --mode auto --agent claude-code
+
+# Hybrid mode — AI implements, human reviews each change
+terra4mice apply --mode hybrid --agent claude-code
+
+# Market mode — post tasks to Execution Market for bounty-based implementation
+terra4mice apply --mode market --bounty 50 --market-api-key $KEY
+
+# Parallel execution (any mode) — respects dependency DAG
+terra4mice apply --mode auto --max-workers 4
+
+# Dry run — show plan without executing
+terra4mice apply --dry-run
+
+# Apply a single resource
+terra4mice apply --resource feature.auth_login
+
+# With verification level
+terra4mice apply --mode auto --verify-level full
+```
+
+Interactive mode example:
 
 ```
 $ terra4mice apply
 
-============================================================
-Next: + feature.auth_login
-      Resource declared in spec but not in state
+════════════════════════════════════════════════════════════
+ Action 1/3: + create feature.auth_login
+════════════════════════════════════════════════════════════
 
-Attributes: {'endpoints': ['POST /auth/login']}
+ Resource declared in spec but not in state
 
-Action: [i]mplement, [p]artial, [s]kip, [q]uit? i
-Files that implement this: src/auth.py, src/routes/login.py
-Marked as implemented: feature.auth_login
+ Dependencies:
+   (none)
+
+ Attributes:
+   - endpoints: ['POST /auth/login']
+
+──────────────────────────────────────────────────────────
+ [i]mplement  [p]artial  [s]kip  [a]i-assist  [m]arket  [q]uit
+→ i
+Files that implement this (comma-separated): src/auth.py
+✓ Marked as implemented: feature.auth_login
 ```
+
+#### Apply Modes
+
+| Mode | Description |
+|------|-------------|
+| **interactive** | Manual implementation with dependency status, context, and suggested files |
+| **auto** | AI agent implements resources — supports Claude Code, Codex, or custom agents |
+| **hybrid** | AI generates implementation, human reviews and accepts/rejects/edits |
+| **market** | Posts tasks to [Execution Market](https://execution.market) for bounty-based implementation |
+
+#### Agent Chaining & Fallbacks
+
+Use comma-separated agent names for automatic fallback:
+
+```bash
+# Try Claude Code first, fall back to Codex if it fails
+terra4mice apply --mode auto --agent claude-code,codex
+```
+
+#### Parallel Execution Engine
+
+The parallel executor respects the dependency DAG — independent resources run concurrently while dependent resources wait:
+
+```bash
+# 4 workers process independent resources in parallel
+terra4mice apply --mode auto --max-workers 4
+```
+
+#### Verification Levels
+
+| Level | Checks |
+|-------|--------|
+| `basic` | Files exist and are non-empty |
+| `git_diff` | Basic + git diff shows changes to expected files |
+| `full` | git_diff + tree-sitter AST verification against spec attributes |
 
 ### `terra4mice state pull / push`
 
@@ -441,12 +512,16 @@ jobs:
 
 | Phase | Status | Description |
 |-------|--------|-------------|
-| 1 - MVP CLI | DONE | init, plan, refresh, state, mark, apply, ci, diff |
-| 2 - tree-sitter AST | DONE | Multi-language deep analysis, spec attribute verification, symbol tracking |
-| 3 - Multi-AI Contexts | DONE | Track which AI (Claude, Codex, Kimi) has context on what |
-| 4 - CI/CD Integration | DONE | GitHub Action, PR comments, convergence badges |
-| 4.5 - Remote State | DONE | S3 backend, DynamoDB locking, state pull/push, migrate-state |
-| 5 - Apply Runner | PLANNED | Interactive apply loop, agent integration |
+| 1 - MVP CLI | ✅ DONE | init, plan, refresh, state, mark, apply, ci, diff |
+| 2 - tree-sitter AST | ✅ DONE | Multi-language deep analysis, spec attribute verification, symbol tracking |
+| 3 - Multi-AI Contexts | ✅ DONE | Track which AI (Claude, Codex, Kimi) has context on what |
+| 4 - CI/CD Integration | ✅ DONE | GitHub Action, PR comments, convergence badges |
+| 4.5 - Remote State | ✅ DONE | S3 backend, DynamoDB locking, state pull/push, migrate-state |
+| 5 - Apply Runner | ✅ DONE | DAG-ordered execution, Auto/Hybrid/Market modes, parallel engine, verification |
+| 5.1 - Agent Dispatch | ✅ DONE | Claude Code/Codex backends, agent chaining, fallbacks |
+| 5.2 - Parallel Engine | ✅ DONE | ThreadPoolExecutor with DAG-aware scheduling, failure cascading |
+| 5.3 - Execution Market | ✅ DONE | Market mode, bounty tasks, dry-run support |
+| 5.4 - E2E Tests & PyPI | ✅ DONE | Comprehensive e2e tests, `python -m terra4mice`, PyPI-ready packaging |
 | 6 - Ecosystem Rollout | PLANNED | Deploy across Ultravioleta DAO projects |
 
 ## Multi-Agent Context Tracking

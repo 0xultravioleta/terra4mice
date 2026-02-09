@@ -7,7 +7,7 @@ name = "terra4mice"
 version = "0.1.0"
 description = "State-Driven Development Framework - Terraform for your codebase"
 readme = "README.md"
-license = {text = "MIT"}
+license = "MIT"
 requires-python = ">=3.9"
 authors = [
     {name = "Ultravioleta DAO", email = "ultravioletadao@gmail.com"}
@@ -23,7 +23,6 @@ keywords = [
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.9",
