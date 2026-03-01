@@ -18,6 +18,8 @@ resources:
 ```
 """
 
+import re
+
 import yaml
 from pathlib import Path
 from typing import Union
@@ -224,3 +226,154 @@ resources:
         f.write(example)
 
     return path
+
+
+def load_spec_from_obsidian(vault_path, subfolder="terra4mice"):
+    """
+    Load spec from an Obsidian vault.
+
+    Reads Markdown notes with terra4mice frontmatter and constructs
+    a Spec from them. Enables using Obsidian as the spec source.
+
+    Args:
+        vault_path: Path to Obsidian vault root
+        subfolder: Subfolder within vault for terra4mice notes
+
+    Returns:
+        Spec object with resources from vault notes
+    """
+    base_path = Path(vault_path) / subfolder
+    if not base_path.exists():
+        raise FileNotFoundError(f"Obsidian vault subfolder not found: {base_path}")
+
+    spec = Spec()
+
+    # First pass: collect all resources to build known_addresses
+    notes = []
+    for md_path in sorted(base_path.rglob("*.md")):
+        rel = md_path.relative_to(base_path)
+        if any(part.startswith("_") for part in rel.parts):
+            continue
+
+        fm = _parse_obsidian_frontmatter(md_path)
+        if fm is None:
+            continue
+
+        # Must have terra4mice_spec: true or terra4mice: true
+        if not (fm.get("terra4mice_spec", False) or fm.get("terra4mice", False)):
+            continue
+
+        notes.append((md_path, rel, fm))
+
+    # Build addresses for wikilink resolution
+    known_addresses = set()
+    for md_path, rel, fm in notes:
+        rtype = fm.get("type")
+        if not rtype and len(rel.parts) >= 2:
+            rtype = rel.parts[0]
+        if not rtype:
+            rtype = "feature"
+
+        rname = fm.get("name", md_path.stem)
+        known_addresses.add(f"{rtype}.{rname}")
+
+    # Second pass: build resources with dependencies
+    for md_path, rel, fm in notes:
+        rtype = fm.get("type")
+        if not rtype and len(rel.parts) >= 2:
+            rtype = rel.parts[0]
+        if not rtype:
+            rtype = "feature"
+
+        rname = fm.get("name", md_path.stem)
+
+        # Dependencies from frontmatter
+        depends_on = list(fm.get("depends_on", []))
+
+        # Dependencies from wikilinks in body
+        body = _read_obsidian_body(md_path)
+        wikilink_deps = _extract_wikilink_dependencies(body, known_addresses)
+        for dep in wikilink_deps:
+            if dep not in depends_on:
+                depends_on.append(dep)
+
+        resource = Resource(
+            type=rtype,
+            name=rname,
+            status=ResourceStatus.MISSING,  # Spec = desired state
+            attributes=fm.get("attributes", {}),
+            depends_on=depends_on,
+            files=fm.get("files", []),
+            tests=fm.get("tests", []),
+        )
+
+        spec.add(resource)
+
+    return spec
+
+
+def _parse_obsidian_frontmatter(path):
+    """Parse YAML frontmatter from a Markdown file."""
+    try:
+        text = Path(path).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
+
+    if not text.startswith("---"):
+        return None
+
+    end = text.find("---", 3)
+    if end == -1:
+        return None
+
+    yaml_str = text[3:end].strip()
+    if not yaml_str:
+        return {}
+
+    try:
+        return yaml.safe_load(yaml_str)
+    except yaml.YAMLError:
+        return None
+
+
+def _read_obsidian_body(path):
+    """Read everything below the frontmatter closing ---."""
+    try:
+        text = Path(path).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return ""
+
+    if not text.startswith("---"):
+        return text
+
+    end = text.find("---", 3)
+    if end == -1:
+        return ""
+
+    body = text[end + 3:]
+    return body.lstrip("\n")
+
+
+def _extract_wikilink_dependencies(body, known_addresses):
+    """
+    Extract dependencies from wikilinks in note body.
+
+    Wikilinks like [[feature/auth]] are converted to feature.auth
+    and included only if they match a known resource address.
+    """
+    if not body:
+        return []
+
+    pattern = r'\[\[([^\]|]+)(?:\|[^\]]+)?\]\]'
+    matches = re.findall(pattern, body)
+
+    deps = []
+    seen = set()
+    for match in matches:
+        # Convert path-style to address-style: feature/auth -> feature.auth
+        address = match.replace("/", ".")
+        if address in known_addresses and address not in seen:
+            deps.append(address)
+            seen.add(address)
+
+    return deps

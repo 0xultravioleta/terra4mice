@@ -121,6 +121,18 @@ def cmd_init(args):
     return 0
 
 
+def _load_spec(args):
+    """Load spec from YAML file or Obsidian vault based on args."""
+    spec_source = getattr(args, "spec_source", "yaml")
+    if spec_source == "obsidian":
+        vault = getattr(args, "vault", None)
+        if not vault:
+            raise ValueError("--vault is required when --spec-source=obsidian")
+        from .spec_parser import load_spec_from_obsidian
+        return load_spec_from_obsidian(vault)
+    return load_spec(args.spec)
+
+
 def cmd_plan(args):
     """Show execution plan."""
     # Handle --ci shorthand
@@ -134,8 +146,8 @@ def cmd_plan(args):
         detailed_exitcode = True
 
     try:
-        spec = load_spec(args.spec)
-    except FileNotFoundError as e:
+        spec = _load_spec(args)
+    except (FileNotFoundError, ValueError) as e:
         print(f"Error: {e}")
         print("Run 'terra4mice init' to create a spec file")
         return 1
@@ -193,8 +205,8 @@ def cmd_ci(args):
     fmt = getattr(args, 'format', 'json') or 'json'
 
     try:
-        spec = load_spec(args.spec)
-    except FileNotFoundError as e:
+        spec = _load_spec(args)
+    except (FileNotFoundError, ValueError) as e:
         if fmt == 'json':
             import json
             print(json.dumps({"error": str(e)}))
@@ -471,8 +483,8 @@ def cmd_refresh(args):
     defined in the spec have been implemented.
     """
     try:
-        spec = load_spec(args.spec)
-    except FileNotFoundError as e:
+        spec = _load_spec(args)
+    except (FileNotFoundError, ValueError) as e:
         print(f"Error: {e}")
         print("Run 'terra4mice init' to create a spec file")
         return 1
@@ -1263,6 +1275,10 @@ def main():
                             help="Strip ANSI escape codes from output")
     plan_parser.add_argument("--ci", action="store_true",
                             help="Shorthand for --format json --no-color --detailed-exitcode")
+    plan_parser.add_argument("--spec-source", choices=["yaml", "obsidian"], default="yaml",
+                            help="Source for spec (yaml file or obsidian vault)")
+    plan_parser.add_argument("--vault", default=None,
+                            help="Obsidian vault path (required when --spec-source=obsidian)")
 
     # ci
     ci_parser = subparsers.add_parser("ci", help="Run refresh + plan in CI mode")
@@ -1281,6 +1297,10 @@ def main():
                           help="Fail if convergence < N%%")
     ci_parser.add_argument("--parallelism", type=int, default=0,
                           help="Number of parallel workers (0=auto, 1=sequential)")
+    ci_parser.add_argument("--spec-source", choices=["yaml", "obsidian"], default="yaml",
+                          help="Source for spec (yaml file or obsidian vault)")
+    ci_parser.add_argument("--vault", default=None,
+                          help="Obsidian vault path (required when --spec-source=obsidian)")
 
     # state
     state_parser = subparsers.add_parser("state", help="State management commands")
@@ -1395,6 +1415,10 @@ def main():
                                help="Show plan after refresh")
     refresh_parser.add_argument("--parallelism", type=int, default=0,
                                help="Number of parallel workers (0=auto, 1=sequential)")
+    refresh_parser.add_argument("--spec-source", choices=["yaml", "obsidian"], default="yaml",
+                               help="Source for spec (yaml file or obsidian vault)")
+    refresh_parser.add_argument("--vault", default=None,
+                               help="Obsidian vault path (required when --spec-source=obsidian)")
 
     # contexts
     contexts_parser = subparsers.add_parser("contexts", help="Multi-agent context tracking")
